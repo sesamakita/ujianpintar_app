@@ -115,9 +115,29 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
     studentNisn: nisn,
   });
 
-  // Countdown Hook
-  const { formattedTime, isUrgent } = useCountdown({
-    initialSeconds: exam.durationMinutes * 60,
+  // Countdown Hook with Persistence against app reload/crash
+  const [initialCountdownSeconds, setInitialCountdownSeconds] = useState<number>(exam.durationMinutes * 60);
+
+  useEffect(() => {
+    const initTimer = async () => {
+      const cleanNisn = (nisn || '').trim();
+      const endTimeKey = `cbt_exam_end_time_${exam.id}_${cleanNisn}`;
+      const savedEndTime = await storage.getItem<number>(endTimeKey);
+      const now = Date.now();
+
+      if (savedEndTime && savedEndTime > now) {
+        const remaining = Math.max(1, Math.round((savedEndTime - now) / 1000));
+        setInitialCountdownSeconds(remaining);
+      } else if (!savedEndTime) {
+        const targetEnd = now + exam.durationMinutes * 60 * 1000;
+        await storage.setItem(endTimeKey, targetEnd);
+      }
+    };
+    initTimer();
+  }, [exam.id, exam.durationMinutes, nisn]);
+
+  const { formattedTime, isUrgent, addTime } = useCountdown({
+    initialSeconds: initialCountdownSeconds,
     isRunning: true,
     onTimeUp: () => {
       setIsTimeUpModalOpen(true);
@@ -146,6 +166,15 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
         // Notification for global time added
         try {
           Vibration.vibrate(300);
+          addTime(addedMinutes * 60);
+
+          // Update persisted end time in local storage
+          const cleanNisn = (nisn || '').trim();
+          const endTimeKey = `cbt_exam_end_time_${exam.id}_${cleanNisn}`;
+          storage.getItem<number>(endTimeKey).then((saved) => {
+            const currentTarget = saved && saved > Date.now() ? saved : Date.now();
+            storage.setItem(endTimeKey, currentTarget + addedMinutes * 60 * 1000);
+          });
         } catch {}
       },
       () => {
@@ -157,7 +186,7 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [exam.id, nisn]);
+  }, [exam.id, nisn, addTime]);
 
   const handleSelectOption = async (optionId: string) => {
     const cleanNisn = (nisn || '').trim();
@@ -213,6 +242,8 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
   };
 
   const handleForceSubmit = () => {
+    const cleanNisn = (nisn || '').trim();
+    storage.removeItem(`cbt_exam_end_time_${exam.id}_${cleanNisn}`).catch(() => {});
     onSubmitExam({
       selectedAnswers,
       shortAnswers,

@@ -96,6 +96,23 @@ export default function App() {
         const cachedPending = await storage.getItem<{ record: GradeRecord; examId: string; sessionId: string }>('cbt_pending_sync_data');
 
         if (cachedExam && cachedQuestions && cachedStudent && cachedStep) {
+          // If cachedStep is 3 (in exam sheet), verify with database whether session is still allowed
+          if (cachedStep === 3) {
+            try {
+              const access = await examService.checkStudentSessionAccess(cachedExam.id, cachedStudent.nisn);
+              if (!access.allowed) {
+                if (access.reason === 'submitted') {
+                  setActiveExam(cachedExam);
+                  setActiveQuestions(cachedQuestions);
+                  setStudentInfo(cachedStudent);
+                  if (cachedGrade) setFinalGrade(cachedGrade);
+                  setStudentStep(4);
+                  return;
+                }
+              }
+            } catch {}
+          }
+
           setActiveExam(cachedExam);
           setActiveQuestions(cachedQuestions);
           setStudentInfo(cachedStudent);
@@ -317,7 +334,7 @@ export default function App() {
           storage.setItem('cbt_pending_sync_data', pending).catch(() => {});
         });
 
-      // 5. Clean up temporary answering cache
+      // 5. Clean up temporary answering cache & persistent timer
       const cleanNisn = (studentInfo.nisn || '').trim();
       storage.removeItem(`ans_sel_${activeExam.id}_${cleanNisn}`).catch(() => {});
       storage.removeItem(`ans_short_${activeExam.id}_${cleanNisn}`).catch(() => {});
@@ -325,6 +342,7 @@ export default function App() {
       storage.removeItem(`ans_sel_${activeExam.id}`).catch(() => {});
       storage.removeItem(`ans_short_${activeExam.id}`).catch(() => {});
       storage.removeItem(`ans_doubt_${activeExam.id}`).catch(() => {});
+      storage.removeItem(`cbt_exam_end_time_${activeExam.id}_${cleanNisn}`).catch(() => {});
     } catch (err) {
       console.warn('handleSubmitExam error:', err);
       setStudentStep(4);
@@ -362,6 +380,10 @@ export default function App() {
     setIntegritySeal('');
     setSyncStatus('synced');
     setPendingSyncData(null);
+    const cleanNisn = (studentInfo.nisn || '').trim();
+    if (activeExam?.id && cleanNisn) {
+      await storage.removeItem(`cbt_exam_end_time_${activeExam.id}_${cleanNisn}`);
+    }
     await storage.removeItem('cbt_active_exam');
     await storage.removeItem('cbt_active_questions');
     await storage.removeItem('cbt_student_info');
