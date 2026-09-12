@@ -105,7 +105,8 @@ export function useLiveProctoring(examId: string) {
       )
     );
 
-    await examService.resetStudentSessionInDb(examId, nisn);
+    const stu = students.find((s) => s.nisn === nisn);
+    await examService.resetStudentSessionInDb(examId, nisn, stu?.name);
   };
 
   const forceSubmitStudent = async (nisn: string) => {
