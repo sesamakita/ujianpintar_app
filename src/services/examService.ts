@@ -536,7 +536,7 @@ export const examService = {
   /**
    * Teacher Action: Reset student session in database
    */
-  async resetStudentSessionInDb(examId: string, studentNisn: string) {
+  async resetStudentSessionInDb(examId: string, studentNisn: string, studentName?: string) {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const validExamId = isValidUUID(examId) ? examId : null;
@@ -555,10 +555,25 @@ export const examService = {
       }
       await updateQuery;
 
+      // Ensure student's real name is retrieved
+      let resolvedStudentName = studentName?.trim();
+      if (!resolvedStudentName) {
+        try {
+          const { data: sData } = await supabase
+            .from('student_sessions')
+            .select('student_name')
+            .eq('nisn', studentNisn)
+            .maybeSingle();
+          if (sData?.student_name) {
+            resolvedStudentName = sData.student_name;
+          }
+        } catch {}
+      }
+
       const nowStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       await supabase.from('violation_logs').insert({
         exam_id: validExamId,
-        student_name: studentNisn,
+        student_name: resolvedStudentName || studentNisn,
         student_nisn: studentNisn,
         timestamp: nowStr,
         message: 'Sesi ujian direset oleh pengawas. Siswa dapat login kembali.',
