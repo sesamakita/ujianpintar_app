@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { GraduationCap, ShieldCheck, X } from 'lucide-react-native';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface RoleSelectorModalProps {
   visible: boolean;
@@ -21,7 +21,7 @@ export const RoleSelectorModal: React.FC<RoleSelectorModalProps> = ({
           {/* Header */}
           <View style={styles.headerRow}>
             <Text style={styles.modalTitle}>Pilih Peran Aplikasi</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.75}>
               <X size={16} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
@@ -36,10 +36,10 @@ export const RoleSelectorModal: React.FC<RoleSelectorModalProps> = ({
             <TouchableOpacity
               style={[styles.roleOption, styles.studentOption]}
               onPress={() => onSelectRole('student')}
-              activeOpacity={0.8}
+              activeOpacity={0.82}
             >
               <View style={[styles.iconCircle, styles.studentIconBg]}>
-                <GraduationCap size={22} color={colors.primary} strokeWidth={2.2} />
+                <GraduationCap size={24} color="#1D4ED8" strokeWidth={2.4} />
               </View>
               <View style={styles.roleInfo}>
                 <Text style={styles.roleName}>Mode Siswa</Text>
@@ -53,10 +53,10 @@ export const RoleSelectorModal: React.FC<RoleSelectorModalProps> = ({
             <TouchableOpacity
               style={[styles.roleOption, styles.teacherOption]}
               onPress={() => onSelectRole('teacher')}
-              activeOpacity={0.8}
+              activeOpacity={0.82}
             >
               <View style={[styles.iconCircle, styles.teacherIconBg]}>
-                <ShieldCheck size={22} color={colors.textPrimary} strokeWidth={2.2} />
+                <ShieldCheck size={24} color="#334155" strokeWidth={2.4} />
               </View>
               <View style={styles.roleInfo}>
                 <Text style={styles.roleName}>Mode Guru / Pengawas</Text>
@@ -81,14 +81,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.xl,
-    padding: 22,
+    backgroundColor: '#FFFFFF',
+    borderRadius: clayRadii.modal,
+    padding: 24,
     width: '100%',
     maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.modal,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.cardHover,
   },
   headerRow: {
     flexDirection: 'row',
@@ -97,15 +99,22 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   modalTitle: {
-    fontFamily: typography.bold,
-    fontSize: 17,
+    fontFamily: typography.extraBold,
+    fontSize: 18,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   closeBtn: {
-    padding: 8,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
   },
   modalSubtitle: {
     fontFamily: typography.regular,
@@ -115,36 +124,45 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   optionsContainer: {
-    gap: 12,
+    gap: 14,
   },
   roleOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: radii.lg,
-    borderWidth: 1.5,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
     gap: 14,
+    ...clayShadows.badge,
   },
   studentOption: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    borderBottomColor: '#BFDBFE',
   },
   teacherOption: {
-    backgroundColor: colors.bgCardSubtle,
-    borderColor: colors.borderDefault,
+    backgroundColor: '#F8FAFC',
+    borderBottomColor: '#CBD5E1',
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
+    width: 48,
+    height: 48,
+    borderRadius: clayRadii.pod,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    ...clayShadows.iconPod,
   },
   studentIconBg: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#BFDBFE',
   },
   teacherIconBg: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#CBD5E1',
   },
   roleInfo: {
     flex: 1,
@@ -152,13 +170,13 @@ const styles = StyleSheet.create({
   },
   roleName: {
     fontFamily: typography.bold,
-    fontSize: 14.5,
+    fontSize: 15,
     color: colors.textPrimary,
   },
   roleDesc: {
     fontFamily: typography.regular,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     lineHeight: 16,
   },
 });

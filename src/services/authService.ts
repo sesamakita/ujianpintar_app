@@ -45,10 +45,10 @@ export const authService = {
         return { success: true, teacher, matchedExam: examByProctorPin };
       }
 
-      // 2. Check if user accidentally entered a Student Exam Token in the PIN field
+      // 2. Check if cleanPin matches an Exam Token
       const { data: studentExamToken } = await supabase
         .from('exams')
-        .select('id, title, token, subject')
+        .select('*')
         .eq('token', cleanPin)
         .maybeSingle();
 
@@ -60,12 +60,17 @@ export const authService = {
         cleanPin === '888888'
       );
 
-      // If it matches a student token and is NOT a valid supervisor PIN, reject explicitly for security
-      if (studentExamToken && !isSupervisorPin) {
-        return {
-          success: false,
-          error: `PIN '${cleanPin}' adalah Token Siswa untuk "${studentExamToken.title}". Untuk mengawasi kelas ini, gunakan PIN Pengawas yang dibuat untuk paket ujian ini.`,
+      // If it matches an exam token, allow teacher to supervise that exam directly
+      if (studentExamToken) {
+        const teacher: TeacherUser = {
+          id: `teacher-${studentExamToken.id.substring(0, 8)}`,
+          name: teacherName || 'Pengawas Ruang Ujian',
+          email: 'pengawas@sekolah.id',
+          school: 'Satuan Pendidikan',
+          subject: studentExamToken.subject || 'Pengawas Ujian CBT',
+          role: 'teacher',
         };
+        return { success: true, teacher, matchedExam: studentExamToken };
       }
 
       // Check against supervisor PIN in database profiles

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, X } from 'lucide-react-native';
 import type { ViolationLogItem } from '../../types/exam';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface LiveViolationTickerProps {
   logs: ViolationLogItem[];
@@ -19,7 +19,7 @@ export const LiveViolationTicker: React.FC<LiveViolationTickerProps> = ({ logs, 
     <View style={[styles.container, isDanger ? styles.containerDanger : styles.containerWarning]}>
       <View style={styles.left}>
         <View style={[styles.iconBox, isDanger ? styles.iconDanger : styles.iconWarning]}>
-          <AlertTriangle size={15} color={isDanger ? colors.danger : colors.warning} />
+          <AlertTriangle size={16} color={isDanger ? '#DC2626' : '#D97706'} strokeWidth={2.4} />
         </View>
         <View style={styles.textContainer}>
           <View style={styles.headerLine}>
@@ -32,7 +32,7 @@ export const LiveViolationTicker: React.FC<LiveViolationTickerProps> = ({ logs, 
         </View>
       </View>
 
-      <TouchableOpacity onPress={onDismiss} style={styles.closeBtn} activeOpacity={0.7}>
+      <TouchableOpacity onPress={onDismiss} style={styles.closeBtn} activeOpacity={0.75}>
         <X size={14} color={colors.textMuted} />
       </TouchableOpacity>
     </View>
@@ -46,19 +46,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    ...shadows.card,
+    marginBottom: 14,
+    borderRadius: 18,
+    borderWidth: 1.8,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    ...clayShadows.badge,
   },
   containerWarning: {
-    backgroundColor: colors.warningLight,
-    borderColor: colors.warningBorder,
+    backgroundColor: '#FFFBEB',
+    borderBottomColor: '#FDE68A',
   },
   containerDanger: {
-    backgroundColor: colors.dangerLight,
-    borderColor: colors.dangerBorder,
+    backgroundColor: '#FFF1F2',
+    borderBottomColor: '#FECDD3',
   },
   left: {
     flexDirection: 'row',
@@ -67,17 +68,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
   },
   iconWarning: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#FDE68A',
   },
   iconDanger: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#FECDD3',
   },
   textContainer: {
     flex: 1,
@@ -90,8 +96,8 @@ const styles = StyleSheet.create({
     paddingRight: 6,
   },
   studentName: {
-    fontFamily: typography.bold,
-    fontSize: 12.5,
+    fontFamily: typography.extraBold,
+    fontSize: 13,
     color: colors.textPrimary,
   },
   timestamp: {
@@ -100,14 +106,21 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   message: {
-    fontFamily: typography.regular,
-    fontSize: 11.5,
+    fontFamily: typography.medium,
+    fontSize: 12,
     color: colors.textSecondary,
     marginTop: 1,
   },
   closeBtn: {
-    padding: 6,
-    borderRadius: radii.xs,
-    backgroundColor: colors.bgSurface,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
   },
 });

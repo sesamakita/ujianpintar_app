@@ -6,7 +6,9 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Sparkles,
   WifiOff,
@@ -16,15 +18,19 @@ import {
   Sun,
   Radio,
   GraduationCap,
-  Shield,
   ArrowRight,
-  CheckCircle2,
 } from 'lucide-react-native';
-import { typography, colors, radii, shadows } from '../../theme';
+import {
+  typography,
+  colors,
+  clayColors,
+  clayShadows,
+  clayRadii,
+} from '../../theme';
 
 interface WelcomeScreenProps {
   onSelectStudent: () => void;
-  onSelectTeacher: () => void;
+  onSelectTeacher?: () => void;
 }
 
 interface FeatureItem {
@@ -33,74 +39,113 @@ interface FeatureItem {
   desc: string;
   icon: React.ReactNode;
   badge?: string;
-  accentBg: string;
+  clayBg: string;
+  clayBevel: string;
+  clayIconBg: string;
+  clayIconBevel: string;
+  badgeBg: string;
+  badgeText: string;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onSelectStudent,
   onSelectTeacher,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 14;
+
   const features: FeatureItem[] = [
     {
       id: 'offline',
       title: 'Arsitektur Offline-First',
       desc: 'Unduh senyap di awal. Tetap berjalan 100% lancar meski Wi-Fi putus atau listrik padam.',
       badge: 'Andal',
-      accentBg: '#eff6ff',
-      icon: <WifiOff size={20} color={colors.primary} />,
+      clayBg: clayColors.blueClay,
+      clayBevel: clayColors.blueClayBevel,
+      clayIconBg: '#DBEAFE',
+      clayIconBevel: '#93C5FD',
+      badgeBg: '#DBEAFE',
+      badgeText: clayColors.blueClayText,
+      icon: <WifiOff size={20} color="#1D4ED8" strokeWidth={2.4} />,
     },
     {
       id: 'anticheat',
       title: 'Proteksi Anti-Curang',
       desc: 'Deteksi otomatis pindah tab, pencegatan tombol back, dan peringatan wajib Mode Game.',
       badge: 'Aman',
-      accentBg: '#fef2f2',
-      icon: <ShieldCheck size={20} color={colors.danger} />,
+      clayBg: clayColors.redClay,
+      clayBevel: clayColors.redClayBevel,
+      clayIconBg: '#FFE4E6',
+      clayIconBevel: '#FDA4AF',
+      badgeBg: '#FFE4E6',
+      badgeText: clayColors.redClayText,
+      icon: <ShieldCheck size={20} color="#DC2626" strokeWidth={2.4} />,
     },
     {
       id: 'math',
       title: 'Formula & Simbol Math',
       desc: 'Mesin LaTeX & KaTeX presisi untuk rendering rumus rumit, akar, matriks, dan angka.',
       badge: 'KaTeX',
-      accentBg: '#f5f3ff',
-      icon: <Sigma size={20} color={colors.doubt} />,
+      clayBg: clayColors.purpleClay,
+      clayBevel: clayColors.purpleClayBevel,
+      clayIconBg: '#F3E8FF',
+      clayIconBevel: '#D8B4FE',
+      badgeBg: '#F3E8FF',
+      badgeText: clayColors.purpleClayText,
+      icon: <Sigma size={20} color="#7C3AED" strokeWidth={2.4} />,
     },
     {
       id: 'scoring',
       title: 'Koreksi Instan & SHA-256',
       desc: 'Penilaian real-time langsung dengan segel kriptografi anti-manipulasi hasil ujian.',
       badge: 'Otomatis',
-      accentBg: '#ecfdf5',
-      icon: <Award size={20} color={colors.success} />,
+      clayBg: clayColors.emeraldClay,
+      clayBevel: clayColors.emeraldClayBevel,
+      clayIconBg: '#D1FAE5',
+      clayIconBevel: '#6EE7B7',
+      badgeBg: '#D1FAE5',
+      badgeText: clayColors.emeraldClayText,
+      icon: <Award size={20} color="#059669" strokeWidth={2.4} />,
     },
     {
       id: 'keepawake',
       title: 'Layar Tetap Menyala',
       desc: 'Fitur Keep-Awake otomatis menjaga layar HP tetap aktif tanpa mati/sleep saat berhitung.',
       badge: 'Nyaman',
-      accentBg: '#fffbeb',
-      icon: <Sun size={20} color={colors.warning} />,
+      clayBg: clayColors.amberClay,
+      clayBevel: clayColors.amberClayBevel,
+      clayIconBg: '#FEF3C7',
+      clayIconBevel: '#FCD34D',
+      badgeBg: '#FEF3C7',
+      badgeText: clayColors.amberClayText,
+      icon: <Sun size={20} color="#D97706" strokeWidth={2.4} />,
     },
     {
       id: 'proctor',
       title: 'Pengawasan Real-Time',
       desc: 'Pantau langsung durasi, progres soal siswa, dan kirim peringatan jarak jauh seketika.',
       badge: 'Live',
-      accentBg: '#eff6ff',
-      icon: <Radio size={20} color={colors.primaryDark} />,
+      clayBg: clayColors.cyanClay,
+      clayBevel: clayColors.cyanClayBevel,
+      clayIconBg: '#CFFAFE',
+      clayIconBevel: '#67E8F9',
+      badgeBg: '#CFFAFE',
+      badgeText: clayColors.cyanClayText,
+      icon: <Radio size={20} color="#0284C7" strokeWidth={2.4} />,
     },
   ];
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={styles.scrollRoot}
+      contentContainerStyle={[styles.container, { paddingTop: topPadding }]}
       showsVerticalScrollIndicator={false}
       bounces={false}
     >
       {/* 1. TOP / APP BRAND HEADER */}
       <View style={styles.headerBox}>
         <View style={styles.logoBadge}>
-          <Sparkles size={28} color={colors.primary} strokeWidth={2.4} />
+          <Sparkles size={30} color="#2563EB" strokeWidth={2.5} />
         </View>
         <View style={styles.brandTitleRow}>
           <Text style={styles.appTitle}>UjianPintar</Text>
@@ -116,21 +161,37 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       {/* 2. FEATURE CARDS GRID */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Fitur Unggulan Sistem CBT</Text>
-        <Text style={styles.sectionSubtitle}>
-          Didesain khusus untuk kelancaran asesmen siswa dan efisiensi pengawasan guru.
-        </Text>
       </View>
 
       <View style={styles.gridContainer}>
         {features.map((item) => (
-          <View key={item.id} style={styles.featureCard}>
+          <View
+            key={item.id}
+            style={[
+              styles.featureCard,
+              {
+                backgroundColor: item.clayBg,
+                borderBottomColor: item.clayBevel,
+              },
+            ]}
+          >
             <View style={styles.cardTopRow}>
-              <View style={[styles.iconBox, { backgroundColor: item.accentBg }]}>
+              <View
+                style={[
+                  styles.iconBox,
+                  {
+                    backgroundColor: item.clayIconBg,
+                    borderBottomColor: item.clayIconBevel,
+                  },
+                ]}
+              >
                 {item.icon}
               </View>
               {item.badge && (
-                <View style={styles.featureBadge}>
-                  <Text style={styles.featureBadgeText}>{item.badge}</Text>
+                <View style={[styles.featureBadge, { backgroundColor: item.badgeBg }]}>
+                  <Text style={[styles.featureBadgeText, { color: item.badgeText }]}>
+                    {item.badge}
+                  </Text>
                 </View>
               )}
             </View>
@@ -142,79 +203,63 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
       {/* 3. BOTTOM ROLE NAVIGATION BUTTONS */}
       <View style={styles.actionsCard}>
-        <Text style={styles.actionPrompt}>Pilih Mode Masuk Aplikasi</Text>
+        <View style={styles.actionHeaderRow}>
+          <Text style={styles.actionPrompt}>SESI ASESMEN CBT</Text>
+          <View style={styles.tactileDot} />
+        </View>
 
-        {/* Mode Siswa Button (Primary) */}
+        {/* Masuk Sesi Ujian Button */}
         <TouchableOpacity
           style={styles.studentBtn}
           onPress={onSelectStudent}
-          activeOpacity={0.88}
+          activeOpacity={0.82}
         >
           <View style={styles.btnIconCircle}>
-            <GraduationCap size={20} color="#ffffff" />
+            <GraduationCap size={22} color="#ffffff" strokeWidth={2.4} />
           </View>
           <View style={styles.btnTextCol}>
-            <Text style={styles.studentBtnTitle}>Masuk Sebagai Siswa</Text>
+            <Text style={styles.studentBtnTitle}>Masuk Sesi Ujian</Text>
             <Text style={styles.studentBtnSubtitle}>
-              Mulai sesi ujian menggunakan 6 digit Token PIN
+              Mulai asesmen untuk Siswa & akses portal Pengawas
             </Text>
           </View>
-          <ArrowRight size={18} color="#ffffff" strokeWidth={2.4} />
+          <ArrowRight size={19} color="#ffffff" strokeWidth={2.6} />
         </TouchableOpacity>
-
-        {/* Mode Guru Button (Secondary) */}
-        <TouchableOpacity
-          style={styles.teacherBtn}
-          onPress={onSelectTeacher}
-          activeOpacity={0.8}
-        >
-          <View style={styles.teacherIconCircle}>
-            <Shield size={18} color={colors.primary} />
-          </View>
-          <View style={styles.btnTextCol}>
-            <Text style={styles.teacherBtnTitle}>Masuk Sebagai Guru / Pengawas</Text>
-            <Text style={styles.teacherBtnSubtitle}>
-              Kelola token, pantau live proctoring & rekap nilai
-            </Text>
-          </View>
-          <ArrowRight size={17} color={colors.textSecondary} strokeWidth={2.2} />
-        </TouchableOpacity>
-
-        {/* Footer Guarantee Note */}
-        <View style={styles.footerNote}>
-          <CheckCircle2 size={13} color={colors.success} />
-          <Text style={styles.footerNoteText}>
-            Sistem terverifikasi anti-gangguan jaringan & auto-save aktif
-          </Text>
-        </View>
       </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
+  scrollRoot: {
+    flex: 1,
+    backgroundColor: clayColors.canvas,
+  },
   container: {
     padding: 20,
-    paddingTop: Platform.OS === 'android' ? 24 : 32,
+    paddingTop: Platform.OS === 'android' ? 16 : 24,
     paddingBottom: 40,
     alignItems: 'center',
-    backgroundColor: colors.bgApp,
   },
+
+  /* 1. BRAND HEADER */
   headerBox: {
     alignItems: 'center',
     marginBottom: 24,
   },
   logoBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: radii.xl,
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1.5,
-    borderColor: colors.primaryBorder,
+    width: 68,
+    height: 68,
+    borderRadius: clayRadii.logo,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    ...shadows.card,
+    marginBottom: 14,
+    ...clayShadows.logo,
   },
   brandTitleRow: {
     flexDirection: 'row',
@@ -223,22 +268,25 @@ const styles = StyleSheet.create({
   },
   appTitle: {
     fontFamily: typography.extraBold,
-    fontSize: 24,
+    fontSize: 25,
     color: colors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   versionBadge: {
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: '#BFDBFE',
+    ...clayShadows.badge,
   },
   versionText: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     fontSize: 10,
-    color: colors.primaryDark,
+    color: '#1D4ED8',
     letterSpacing: 0.3,
   },
   appTagline: {
@@ -246,28 +294,27 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
     maxWidth: 320,
     lineHeight: 18,
   },
+
+  /* 2. SECTION HEADER */
   sectionHeader: {
     width: '100%',
     maxWidth: 460,
-    marginBottom: 12,
+    marginBottom: 14,
+    alignItems: 'center',
   },
   sectionTitle: {
     fontFamily: typography.bold,
-    fontSize: 14,
+    fontSize: 14.5,
     color: colors.textPrimary,
     letterSpacing: -0.2,
+    textAlign: 'center',
   },
-  sectionSubtitle: {
-    fontFamily: typography.regular,
-    fontSize: 11.5,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: 16,
-  },
+
+  /* 3. FEATURE CARDS GRID */
   gridContainer: {
     width: '100%',
     maxWidth: 460,
@@ -278,12 +325,12 @@ const styles = StyleSheet.create({
   },
   featureCard: {
     width: '48.3%',
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
+    borderRadius: clayRadii.card,
     padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    borderWidth: 2.2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 5,
+    ...clayShadows.card,
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -292,22 +339,27 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.md,
+    width: 40,
+    height: 40,
+    borderRadius: clayRadii.pod,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
     alignItems: 'center',
     justifyContent: 'center',
+    ...clayShadows.iconPod,
   },
   featureBadge: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radii.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.2,
+    borderColor: '#FFFFFF',
+    ...clayShadows.badge,
   },
   featureBadgeText: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 9.5,
-    color: colors.textMuted,
   },
   featureTitle: {
     fontFamily: typography.bold,
@@ -322,39 +374,62 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 15.5,
   },
+
+  /* 4. ACTIONS CARD (BOTTOM CTAs) */
   actionsCard: {
     width: '100%',
     maxWidth: 460,
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.xl,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    gap: 12,
-    ...shadows.card,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 20,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: clayColors.whiteBevel,
+    gap: 13,
+    ...clayShadows.cardHover,
+  },
+  actionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   actionPrompt: {
     fontFamily: typography.bold,
-    fontSize: 12.5,
+    fontSize: 12,
     color: colors.textPrimary,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 2,
+    letterSpacing: 0.5,
   },
+  tactileDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
+  },
+
+  // Student Button
   studentBtn: {
-    backgroundColor: colors.success,
-    borderRadius: radii.lg,
-    padding: 14,
+    backgroundColor: clayColors.studentBtnBg,
+    borderRadius: clayRadii.button,
+    padding: 15,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...shadows.card,
+    borderWidth: 2,
+    borderColor: clayColors.studentBtnBorder,
+    borderBottomWidth: 5.5,
+    borderBottomColor: clayColors.studentBtnBevel,
+    ...clayShadows.btnStudent,
   },
   btnIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -363,58 +438,14 @@ const styles = StyleSheet.create({
   },
   studentBtnTitle: {
     fontFamily: typography.bold,
-    fontSize: 14,
+    fontSize: 14.5,
     color: '#ffffff',
     letterSpacing: 0.1,
   },
   studentBtnSubtitle: {
     fontFamily: typography.regular,
     fontSize: 11,
-    color: '#d1fae5',
+    color: '#e6fffa',
     marginTop: 1,
-  },
-  teacherBtn: {
-    backgroundColor: colors.bgApp,
-    borderRadius: radii.lg,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-  },
-  teacherIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-  },
-  teacherBtnTitle: {
-    fontFamily: typography.bold,
-    fontSize: 13.5,
-    color: colors.textPrimary,
-    letterSpacing: 0.1,
-  },
-  teacherBtnSubtitle: {
-    fontFamily: typography.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  footerNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  footerNoteText: {
-    fontFamily: typography.medium,
-    fontSize: 11,
-    color: colors.textMuted,
   },
 });

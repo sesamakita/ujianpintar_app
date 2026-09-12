@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import { X, Grid, Check, Bookmark } from 'lucide-react-native';
 import type { Question } from '../../types/exam';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface QuestionGridModalProps {
   visible: boolean;
@@ -39,11 +39,11 @@ export const QuestionGridModal: React.FC<QuestionGridModalProps> = ({
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <View style={styles.gridIconBadge}>
-                <Grid size={17} color={colors.primary} />
+                <Grid size={18} color="#2563EB" strokeWidth={2.4} />
               </View>
               <Text style={styles.title}>Navigasi Nomor Soal</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.75}>
               <X size={16} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
@@ -51,9 +51,7 @@ export const QuestionGridModal: React.FC<QuestionGridModalProps> = ({
           {/* Legend Badges */}
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendBox, styles.answeredBox]}>
-                <Check size={11} color="#ffffff" strokeWidth={3} />
-              </View>
+              <View style={[styles.legendBox, styles.answeredBox]} />
               <Text style={styles.legendText}>Dijawab ({answeredCount})</Text>
             </View>
 
@@ -105,16 +103,10 @@ export const QuestionGridModal: React.FC<QuestionGridModalProps> = ({
                   <Text style={[styles.itemText, textStyle]}>
                     {idx + 1}
                   </Text>
-                  
-                  {isAnswered && !isDoubt && (
-                    <View style={styles.answeredBadgeIndicator}>
-                      <Check size={8} color="#ffffff" strokeWidth={3} />
-                    </View>
-                  )}
 
                   {isDoubt && (
                     <View style={styles.doubtBadgeIndicator}>
-                      <Bookmark size={8} color="#ffffff" fill="#ffffff" />
+                      <Bookmark size={9} color="#ffffff" fill="#ffffff" />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -132,7 +124,7 @@ export const QuestionGridModal: React.FC<QuestionGridModalProps> = ({
               }}
               activeOpacity={0.85}
             >
-              <Check size={16} color="#ffffff" strokeWidth={2.8} />
+              <Check size={18} color="#ffffff" strokeWidth={2.8} />
               <Text style={styles.submitGridBtnText}>Kumpulkan Lembar Jawaban</Text>
             </TouchableOpacity>
           )}
@@ -149,12 +141,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   card: {
-    backgroundColor: colors.bgSurface,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 22,
     maxHeight: '75%',
-    ...shadows.modal,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 0,
+    ...clayShadows.cardHover,
   },
   header: {
     flexDirection: 'row',
@@ -168,33 +163,48 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   gridIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primaryLight,
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
+    ...clayShadows.badge,
   },
   title: {
-    fontFamily: typography.bold,
-    fontSize: 16,
+    fontFamily: typography.extraBold,
+    fontSize: 16.5,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   closeBtn: {
-    padding: 7,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
   },
   legendRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: colors.bgApp,
+    backgroundColor: '#F8FAFC',
     padding: 10,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: '#CBD5E1',
     marginBottom: 16,
+    ...clayShadows.badge,
   },
   legendItem: {
     flexDirection: 'row',
@@ -202,106 +212,121 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendBox: {
-    width: 18,
-    height: 18,
-    borderRadius: radii.xs,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   answeredBox: {
-    backgroundColor: colors.success,
+    backgroundColor: '#10B981',
+    borderBottomWidth: 2,
+    borderBottomColor: '#047857',
   },
   doubtBox: {
-    backgroundColor: colors.warning,
+    backgroundColor: '#D97706',
+    borderBottomWidth: 2,
+    borderBottomColor: '#92400E',
   },
   unansweredBox: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
   },
   legendText: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 11.5,
     color: colors.textSecondary,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
     paddingBottom: 24,
     justifyContent: 'center',
   },
   gridItem: {
-    width: 52,
-    height: 52,
-    borderRadius: radii.md,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    ...shadows.card,
+    ...clayShadows.badge,
   },
   itemUnanswered: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4,
+    borderBottomColor: '#CBD5E1',
   },
   textUnanswered: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     color: colors.textSecondary,
     includeFontPadding: false,
   },
   itemAnswered: {
-    backgroundColor: colors.success,
-    borderWidth: 0,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    borderBottomWidth: 4.5,
+    borderBottomColor: '#047857',
   },
   textAnswered: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     color: '#ffffff',
     includeFontPadding: false,
   },
   itemDoubt: {
-    backgroundColor: colors.warning,
-    borderWidth: 0,
+    backgroundColor: '#D97706',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    borderBottomWidth: 4.5,
+    borderBottomColor: '#92400E',
   },
   textDoubt: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     color: '#ffffff',
     includeFontPadding: false,
   },
   itemCurrent: {
-    borderWidth: 2.5,
-    borderColor: colors.primary,
-    transform: [{ scale: 1.05 }],
+    borderColor: '#2563EB',
+    borderWidth: 2.8,
+    transform: [{ scale: 1.06 }],
   },
   itemText: {
-    fontSize: 15,
+    fontSize: 15.5,
     includeFontPadding: false,
     textAlign: 'center',
   },
-  answeredBadgeIndicator: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-  },
   doubtBadgeIndicator: {
     position: 'absolute',
-    top: 3,
-    right: 3,
+    top: 4,
+    right: 4,
   },
   submitGridBtn: {
-    height: 48,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.success,
-    borderRadius: radii.md,
+    backgroundColor: clayColors.studentBtnBg,
+    borderRadius: clayRadii.button,
     marginTop: 10,
-    ...shadows.card,
+    borderWidth: 2,
+    borderColor: clayColors.studentBtnBorder,
+    borderBottomWidth: 5,
+    borderBottomColor: clayColors.studentBtnBevel,
+    ...clayShadows.btnStudent,
   },
   submitGridBtnText: {
     fontFamily: typography.bold,
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#ffffff',
     letterSpacing: 0.1,
     includeFontPadding: false,

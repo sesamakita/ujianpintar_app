@@ -8,7 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Search,
   ArrowLeft,
@@ -19,7 +22,7 @@ import {
 import type { GradeRecord, ExamSettings } from '../../types/exam';
 import { StatusBadge } from '../common/StatusBadge';
 import { examService } from '../../services/examService';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, radii, shadows, clayColors, clayShadows, clayRadii } from '../../theme';
 import { CustomModal } from '../common/CustomModal';
 
 interface TeacherGradeReportViewProps {
@@ -31,6 +34,9 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
   exam,
   onBackToProctoring,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 8;
+
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,7 +98,7 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPadding }]}>
         <TouchableOpacity style={styles.backBtn} onPress={onBackToProctoring} activeOpacity={0.7}>
           <ArrowLeft size={16} color={colors.textPrimary} />
           <Text style={styles.backBtnText}>Kembali ke Pengawasan</Text>
@@ -261,7 +267,7 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgApp,
+    backgroundColor: clayColors.canvas,
   },
   header: {
     flexDirection: 'row',
@@ -269,18 +275,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 18,
     paddingVertical: 12,
-    backgroundColor: colors.bgSurface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.badge,
   },
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: clayRadii.badge,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#CBD5E1',
+    ...clayShadows.badge,
   },
   backBtnText: {
-    fontFamily: typography.semiBold,
-    fontSize: 12.5,
+    fontFamily: typography.bold,
+    fontSize: 12,
     color: colors.textPrimary,
   },
   headerRightRow: {
@@ -289,31 +305,37 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   refreshBtn: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryLight,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
+    ...clayShadows.badge,
   },
   copyBtn: {
-    height: 34,
+    height: 36,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 12,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
+    ...clayShadows.badge,
   },
   copyBtnText: {
     fontFamily: typography.bold,
     fontSize: 11.5,
-    color: colors.primary,
+    color: '#1D4ED8',
     includeFontPadding: false,
   },
   scrollContent: {
@@ -324,13 +346,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pageTitle: {
-    fontFamily: typography.bold,
-    fontSize: 17,
+    fontFamily: typography.extraBold,
+    fontSize: 18,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   pageSubtitle: {
-    fontFamily: typography.regular,
+    fontFamily: typography.medium,
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
@@ -338,29 +360,33 @@ const styles = StyleSheet.create({
   analyticsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
     marginBottom: 16,
   },
   analyticsCard: {
-    width: '48.5%',
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    width: '48.3%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.badge,
   },
   analyticsCardSmall: {
-    width: '48.5%',
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.md,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    width: '48.3%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.badge,
   },
   analyticsLabel: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     fontSize: 10.5,
     color: colors.textMuted,
     textTransform: 'uppercase',
@@ -369,17 +395,18 @@ const styles = StyleSheet.create({
   analyticsValRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 3,
+    gap: 4,
     marginVertical: 2,
   },
   analyticsVal: {
     fontFamily: typography.extraBold,
-    fontSize: 24,
+    fontSize: 26,
     color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   analyticsValSmall: {
     fontFamily: typography.extraBold,
-    fontSize: 18,
+    fontSize: 22,
     marginTop: 2,
   },
   analyticsMax: {
@@ -393,13 +420,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   textGreen: {
-    color: colors.success,
+    color: '#059669',
   },
   textBlue: {
-    color: colors.primary,
+    color: '#2563EB',
   },
   textOrange: {
-    color: colors.warning,
+    color: '#D97706',
   },
   searchWrapper: {
     position: 'relative',
@@ -408,39 +435,45 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     position: 'absolute',
-    left: 13,
+    left: 14,
     zIndex: 1,
   },
   searchInput: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radii.md,
-    paddingLeft: 38,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#CBD5E1',
+    borderRadius: 16,
+    paddingLeft: 42,
     paddingRight: 14,
     paddingVertical: 10,
     fontSize: 13,
     fontFamily: typography.medium,
     color: colors.textPrimary,
+    ...clayShadows.badge,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     marginBottom: 14,
   },
   filterPill: {
-    height: 32,
-    paddingHorizontal: 13,
-    borderRadius: radii.full,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: clayRadii.badge,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...clayShadows.badge,
   },
   filterPillActive: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
+    backgroundColor: '#1E293B',
+    borderBottomColor: '#0F172A',
   },
   filterText: {
     fontFamily: typography.semiBold,
@@ -464,15 +497,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   gradeList: {
-    gap: 10,
+    gap: 12,
   },
   gradeCard: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.card,
   },
   gradeCardTop: {
     flexDirection: 'row',
@@ -486,7 +521,7 @@ const styles = StyleSheet.create({
   },
   studentName: {
     fontFamily: typography.bold,
-    fontSize: 14,
+    fontSize: 14.5,
     color: colors.textPrimary,
   },
   studentNisn: {
@@ -498,31 +533,34 @@ const styles = StyleSheet.create({
   scorePill: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    backgroundColor: colors.bgApp,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
     gap: 2,
+    ...clayShadows.badge,
   },
   scoreText: {
     fontFamily: typography.extraBold,
     fontSize: 16,
-    color: colors.textPrimary,
+    color: '#1D4ED8',
   },
   scoreMaxText: {
     fontFamily: typography.bold,
     fontSize: 10.5,
-    color: colors.textMuted,
+    color: '#93C5FD',
   },
   gradeCardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: '#F1F5F9',
   },
   bottomMeta: {
     flexDirection: 'row',
@@ -537,18 +575,20 @@ const styles = StyleSheet.create({
   violationText: {
     fontFamily: typography.bold,
     fontSize: 11,
-    color: colors.danger,
+    color: '#DC2626',
   },
   emptyStateBox: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     padding: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 5,
+    borderBottomColor: clayColors.whiteBevel,
     marginTop: 10,
-    ...shadows.card,
+    ...clayShadows.card,
   },
   emptyTitle: {
     fontFamily: typography.bold,

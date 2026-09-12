@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ShieldCheck, User, RefreshCw } from 'lucide-react-native';
-import { typography, colors, radii } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface HeaderBarProps {
   title?: string;
@@ -27,9 +27,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       <View style={styles.left}>
         <View style={[styles.avatarBox, isTeacher ? styles.avatarTeacher : styles.avatarStudent]}>
           {isTeacher ? (
-            <ShieldCheck size={18} color={colors.textPrimary} strokeWidth={2.2} />
+            <ShieldCheck size={19} color="#1E293B" strokeWidth={2.4} />
           ) : (
-            <User size={18} color={colors.primary} strokeWidth={2.2} />
+            <User size={19} color="#2563EB" strokeWidth={2.4} />
           )}
         </View>
         <View style={styles.titleWrapper}>
@@ -46,8 +46,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
       <View style={styles.right}>
         {onRefresh && (
-          <TouchableOpacity style={styles.iconBtn} onPress={onRefresh} activeOpacity={0.7}>
-            <RefreshCw size={15} color={colors.textMuted} />
+          <TouchableOpacity style={styles.iconBtn} onPress={onRefresh} activeOpacity={0.75}>
+            <RefreshCw size={15} color={colors.textSecondary} strokeWidth={2.2} />
           </TouchableOpacity>
         )}
 
@@ -73,10 +73,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingVertical: 13,
-    backgroundColor: colors.bgSurface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: clayColors.whiteBevel,
+    zIndex: 10,
+    ...clayShadows.badge,
   },
   left: {
     flexDirection: 'row',
@@ -86,24 +88,27 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarBox: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.md,
+    width: 40,
+    height: 40,
+    borderRadius: clayRadii.pod,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    ...clayShadows.iconPod,
   },
   avatarStudent: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    borderBottomColor: '#BFDBFE',
   },
   avatarTeacher: {
-    backgroundColor: colors.bgCardSubtle,
-    borderColor: colors.borderDefault,
+    backgroundColor: '#F1F5F9',
+    borderBottomColor: '#CBD5E1',
   },
   titleWrapper: {
     flex: 1,
-    gap: 1.5,
+    gap: 2,
   },
   title: {
     fontFamily: typography.bold,
@@ -122,34 +127,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconBtn: {
-    padding: 8,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    width: 36,
+    height: 36,
+    borderRadius: clayRadii.pod,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#CBD5E1',
+    ...clayShadows.badge,
   },
   roleSwitchBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingVertical: 6,
-    borderRadius: radii.full,
-    borderWidth: 1,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    ...clayShadows.badge,
   },
   roleStudent: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    borderBottomColor: '#BFDBFE',
   },
   roleTeacher: {
-    backgroundColor: colors.bgCardSubtle,
-    borderColor: colors.borderDefault,
+    backgroundColor: '#F1F5F9',
+    borderBottomColor: '#CBD5E1',
   },
   roleText: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 11.5,
   },
   textStudent: {
-    color: colors.primary,
+    color: '#1D4ED8',
   },
   textTeacher: {
-    color: colors.textSecondary,
+    color: '#334155',
   },
 });

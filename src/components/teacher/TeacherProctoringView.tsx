@@ -5,9 +5,11 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
   ActivityIndicator,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Users,
   Clock,
@@ -16,8 +18,7 @@ import {
   Lock,
   Plus,
   ChevronRight,
-  RefreshCw,
-  Layers,
+  ShieldCheck,
 } from 'lucide-react-native';
 import type { ExamSettings, StudentProctoring } from '../../types/exam';
 import { StatusBadge } from '../common/StatusBadge';
@@ -25,14 +26,15 @@ import { LiveViolationTicker } from './LiveViolationTicker';
 import { TeacherStudentActionModal } from './TeacherStudentActionModal';
 import { useLiveProctoring } from '../../hooks/useLiveProctoring';
 import { examService } from '../../services/examService';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, radii, shadows, clayColors, clayShadows, clayRadii } from '../../theme';
 import { CustomModal } from '../common/CustomModal';
 
 interface TeacherProctoringViewProps {
   exam: ExamSettings;
   teacherName: string;
-  onOpenGradeReport: () => void;
+  onOpenGradeReport?: () => void;
   onSelectExam?: (exam: ExamSettings) => void;
+  onSwitchRole?: () => void;
 }
 
 export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
@@ -40,10 +42,12 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
   teacherName,
   onOpenGradeReport,
   onSelectExam,
+  onSwitchRole,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 12;
+
   const [currentExam, setCurrentExam] = useState<ExamSettings>(exam);
-  const [availableExams, setAvailableExams] = useState<ExamSettings[]>([]);
-  const [isExamDropdownOpen, setIsExamDropdownOpen] = useState(false);
   const [timeModalMinutes, setTimeModalMinutes] = useState<number | null>(null);
   const [isLockAllModalOpen, setIsLockAllModalOpen] = useState(false);
 
@@ -67,12 +71,11 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
     }
   }, [exam?.id, exam?.token, exam?.subject]);
 
-  // Fetch all published exams in Supabase for teacher exam selector
+  // Fetch initial exam if needed
   useEffect(() => {
     const fetchExams = async () => {
       const all = await examService.getAllExams();
       if (all.length > 0) {
-        setAvailableExams(all);
         if (!currentExam.id || currentExam.id === 'exam-default-01') {
           setCurrentExam(all[0]);
           if (onSelectExam) onSelectExam(all[0]);
@@ -118,68 +121,54 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Live Violation Ticker */}
-      <LiveViolationTicker
-        logs={violationLogs}
-        onDismiss={() => setViolationLogs([])}
-      />
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: topPadding }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Live Violation Ticker */}
+        <LiveViolationTicker
+          logs={violationLogs}
+          onDismiss={() => setViolationLogs([])}
+        />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header Banner with Exam Switcher */}
+        {/* Mid Semester Card (Exam Banner) with Teacher Info & Mode Guru Card */}
         <View style={styles.examBanner}>
-          <View style={styles.examBannerLeft}>
-            <View style={styles.examTitleRow}>
-              <Text style={styles.examTitle}>{currentExam.title}</Text>
-              {availableExams.length > 0 && (
-                <TouchableOpacity
-                  style={styles.switchExamBtn}
-                  onPress={() => setIsExamDropdownOpen(!isExamDropdownOpen)}
-                  activeOpacity={0.7}
-                >
-                  <Layers size={13} color={colors.primary} />
-                  <Text style={styles.switchExamText}>Ganti Paket</Text>
-                </TouchableOpacity>
-              )}
+          {/* Top Row: Teacher Info & Mode Guru Badge */}
+          <View style={styles.bannerHeaderRow}>
+            <View style={styles.teacherInfoBox}>
+              <Text style={styles.teacherRoleLabel}>GURU PENGAWAS</Text>
+              <Text style={styles.teacherNameText}>{teacherName || 'Bpk. Rahmat, S.Pd.'}</Text>
             </View>
-            <Text style={styles.examDetails}>
-              {currentExam.subject} • Token PIN: <Text style={styles.tokenText}>{currentExam.token}</Text>
-            </Text>
+
+            <TouchableOpacity
+              style={styles.modeGuruBadge}
+              onPress={onSwitchRole}
+              activeOpacity={onSwitchRole ? 0.75 : 1}
+            >
+              <View style={styles.modeGuruIconPod}>
+                <ShieldCheck size={14} color="#1D4ED8" strokeWidth={2.4} />
+              </View>
+              <Text style={styles.modeGuruText}>Mode Guru</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.bannerRightActions}>
-            <TouchableOpacity style={styles.refreshBtn} onPress={refreshRoster} activeOpacity={0.7}>
-              <RefreshCw size={14} color={colors.textPrimary} />
-            </TouchableOpacity>
+          {/* Clean Divider */}
+          <View style={styles.bannerDivider} />
 
-            <TouchableOpacity style={styles.rekapBtn} onPress={onOpenGradeReport} activeOpacity={0.8}>
-              <Text style={styles.rekapBtnText}>Rekap Nilai</Text>
-            </TouchableOpacity>
+          {/* Exam Details */}
+          <View style={styles.bannerBody}>
+            <Text style={styles.examTitle}>{currentExam.title}</Text>
+            <View style={styles.metaRow}>
+              <View style={styles.subjectPill}>
+                <Text style={styles.subjectText}>{currentExam.subject}</Text>
+              </View>
+              <View style={styles.tokenPill}>
+                <Text style={styles.tokenLabel}>TOKEN PIN:</Text>
+                <Text style={styles.tokenValue}>{currentExam.token}</Text>
+              </View>
+            </View>
           </View>
         </View>
-
-        {/* Dropdown Exam Switcher */}
-        {isExamDropdownOpen && availableExams.length > 0 && (
-          <View style={styles.dropdownBox}>
-            <Text style={styles.dropdownTitle}>Pilih Paket Ujian dari Database:</Text>
-            {availableExams.map((ex) => (
-              <TouchableOpacity
-                key={ex.id || ex.token}
-                style={[styles.dropdownItem, currentExam.id === ex.id && styles.dropdownItemActive]}
-                onPress={() => {
-                  setCurrentExam(ex);
-                  if (onSelectExam) onSelectExam(ex);
-                  setIsExamDropdownOpen(false);
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.dropdownItemTitle, currentExam.id === ex.id && styles.dropdownItemTextActive]}>
-                  {ex.title} ({ex.subject})
-                </Text>
-                <Text style={styles.dropdownItemToken}>Token: {ex.token}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         {/* KPI Cards Grid */}
         <View style={styles.kpiGrid}>
@@ -226,7 +215,7 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
               activeOpacity={0.75}
             >
               <Plus size={14} color={colors.primary} strokeWidth={2.8} />
-              <Text style={styles.timeBtnText}>+5 Menit</Text>
+              <Text style={styles.timeBtnText}>5 Menit</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -235,7 +224,7 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
               activeOpacity={0.75}
             >
               <Plus size={14} color={colors.primary} strokeWidth={2.8} />
-              <Text style={styles.timeBtnText}>+10 Menit</Text>
+              <Text style={styles.timeBtnText}>10 Menit</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -249,47 +238,53 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
           </View>
         </View>
 
-        {/* Filter Pills */}
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('all')}
-            activeOpacity={0.7}
+        {/* Filter Pills (Horizontal Scroll) */}
+        <View style={styles.filterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContent}
           >
-            <Text style={[styles.filterText, activeFilter === 'all' && styles.filterTextActive]}>
-              Semua ({totalCount})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
+              onPress={() => setActiveFilter('all')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.filterText, activeFilter === 'all' && styles.filterTextActive]}>
+                Semua ({totalCount})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'working' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('working')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterText, activeFilter === 'working' && styles.filterTextActive]}>
-              Mengerjakan ({workingCount})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'working' && styles.filterPillActive]}
+              onPress={() => setActiveFilter('working')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.filterText, activeFilter === 'working' && styles.filterTextActive]}>
+                Mengerjakan ({workingCount})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'violation' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('violation')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterText, activeFilter === 'violation' && styles.filterTextActive]}>
-              Pelanggaran ({violationCount})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'violation' && styles.filterPillActive]}
+              onPress={() => setActiveFilter('violation')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.filterText, activeFilter === 'violation' && styles.filterTextActive]}>
+                Pelanggaran ({violationCount})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'submitted' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('submitted')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterText, activeFilter === 'submitted' && styles.filterTextActive]}>
-              Selesai ({submittedCount})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'submitted' && styles.filterPillActive]}
+              onPress={() => setActiveFilter('submitted')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.filterText, activeFilter === 'submitted' && styles.filterTextActive]}>
+                Selesai ({submittedCount})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* Students List */}
@@ -415,126 +410,129 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bgApp,
+    backgroundColor: clayColors.canvas,
   },
   scrollContent: {
     padding: 16,
     paddingBottom: 36,
   },
   examBanner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 2.2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 5,
+    borderBottomColor: clayColors.whiteBevel,
+    marginBottom: 14,
+    ...clayShadows.card,
+  },
+  bannerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    marginBottom: 14,
-    ...shadows.card,
+    marginBottom: 12,
   },
-  examBannerLeft: {
+  teacherInfoBox: {
     flex: 1,
     marginRight: 10,
   },
-  examTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+  teacherRoleLabel: {
+    fontFamily: typography.extraBold,
+    fontSize: 10,
+    color: '#2563EB',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
-  examTitle: {
+  teacherNameText: {
     fontFamily: typography.bold,
     fontSize: 15,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
-  switchExamBtn: {
+  modeGuruBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.sm,
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+    borderBottomWidth: 3,
+    borderBottomColor: '#BFDBFE',
+    ...clayShadows.badge,
   },
-  switchExamText: {
-    fontFamily: typography.bold,
-    fontSize: 11,
-    color: colors.primary,
+  modeGuruIconPod: {
+    width: 22,
+    height: 22,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  examDetails: {
-    fontFamily: typography.medium,
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
+  modeGuruText: {
+    fontFamily: typography.extraBold,
+    fontSize: 11.5,
+    color: '#1D4ED8',
+    includeFontPadding: false,
   },
-  tokenText: {
-    fontFamily: typography.bold,
-    color: colors.primary,
+  bannerDivider: {
+    height: 1.5,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 12,
   },
-  bannerRightActions: {
+  bannerBody: {
+    gap: 8,
+  },
+  examTitle: {
+    fontFamily: typography.extraBold,
+    fontSize: 15,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  refreshBtn: {
-    padding: 8,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  rekapBtn: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radii.sm,
-  },
-  rekapBtnText: {
-    fontFamily: typography.bold,
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  dropdownBox: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.md,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    marginBottom: 14,
-    ...shadows.card,
-  },
-  dropdownTitle: {
-    fontFamily: typography.bold,
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  dropdownItem: {
-    paddingVertical: 8,
+  subjectPill: {
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 10,
-    borderRadius: radii.sm,
-    marginBottom: 4,
+    paddingVertical: 4.5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  dropdownItemActive: {
-    backgroundColor: colors.primaryLight,
-  },
-  dropdownItemTitle: {
+  subjectText: {
     fontFamily: typography.semiBold,
-    fontSize: 12.5,
-    color: colors.textPrimary,
+    fontSize: 11.5,
+    color: colors.textSecondary,
   },
-  dropdownItemTextActive: {
-    color: colors.primary,
+  tokenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  tokenLabel: {
     fontFamily: typography.bold,
+    fontSize: 10.5,
+    color: '#16A34A',
   },
-  dropdownItemToken: {
-    fontFamily: typography.regular,
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
+  tokenValue: {
+    fontFamily: typography.extraBold,
+    fontSize: 12,
+    color: '#15803D',
+    letterSpacing: 0.5,
   },
   kpiGrid: {
     flexDirection: 'row',
@@ -543,31 +541,33 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 1.8,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4,
+    borderBottomColor: '#CBD5E1',
     alignItems: 'center',
-    ...shadows.card,
+    ...clayShadows.badge,
   },
   kpiIconBox: {
     width: 28,
     height: 28,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primaryLight,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 3,
   },
   kpiIconWorking: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#EFF6FF',
   },
   kpiIconDanger: {
-    backgroundColor: colors.dangerLight,
+    backgroundColor: '#FFF1F2',
   },
   kpiIconSuccess: {
-    backgroundColor: colors.successLight,
+    backgroundColor: '#ECFDF5',
   },
   kpiValue: {
     fontFamily: typography.extraBold,
@@ -575,25 +575,27 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   kpiLabel: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 10,
     color: colors.textMuted,
     marginTop: 1,
   },
   textDanger: {
-    color: colors.danger,
+    color: '#DC2626',
   },
   controlsBar: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: clayColors.whiteBevel,
     marginBottom: 14,
-    ...shadows.card,
+    ...clayShadows.badge,
   },
   controlsLabel: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     fontSize: 11,
     color: colors.textSecondary,
     marginBottom: 8,
@@ -606,31 +608,39 @@ const styles = StyleSheet.create({
   },
   timeBtn: {
     flex: 1,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    borderRadius: radii.md,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#BFDBFE',
+    borderRadius: 16,
+    ...clayShadows.badge,
   },
   timeBtnText: {
     fontFamily: typography.bold,
     fontSize: 11.5,
-    color: colors.primaryDark,
+    color: '#1D4ED8',
     includeFontPadding: false,
   },
   lockBtn: {
     flex: 1,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: colors.danger,
-    borderRadius: radii.md,
+    backgroundColor: clayColors.dangerBtnBg,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: clayColors.dangerBtnBorder,
+    borderBottomWidth: 3.5,
+    borderBottomColor: clayColors.dangerBtnBevel,
+    ...clayShadows.btnDanger,
   },
   lockBtnText: {
     fontFamily: typography.bold,
@@ -638,29 +648,37 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     includeFontPadding: false,
   },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 6,
+  filterContainer: {
+    marginHorizontal: -16,
     marginBottom: 14,
-    flexWrap: 'wrap',
+  },
+  filterScrollContent: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   filterPill: {
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: radii.full,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...clayShadows.badge,
   },
   filterPillActive: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+    borderBottomColor: '#0F172A',
   },
   filterText: {
     fontFamily: typography.semiBold,
-    fontSize: 11.5,
+    fontSize: 12,
     color: colors.textSecondary,
     includeFontPadding: false,
   },
@@ -680,15 +698,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   rosterList: {
-    gap: 10,
+    gap: 12,
   },
   studentCard: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.card,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.card,
   },
   cardTop: {
     flexDirection: 'row',
@@ -698,7 +718,7 @@ const styles = StyleSheet.create({
   },
   studentNameBox: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
   cardStudentName: {
     fontFamily: typography.bold,
@@ -717,7 +737,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 5,
-    backgroundColor: colors.bgCardSubtle,
+    backgroundColor: '#F1F5F9',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -736,10 +756,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 6,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: '#F1F5F9',
   },
   timerRow: {
     flexDirection: 'row',
@@ -756,10 +775,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.danger,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: radii.xs,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   violationTagText: {
     fontFamily: typography.bold,
@@ -769,23 +790,33 @@ const styles = StyleSheet.create({
   actionPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#BFDBFE',
   },
   actionPromptText: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 11.5,
-    color: colors.primary,
+    color: '#1D4ED8',
   },
   emptyStateBox: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     padding: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 5,
+    borderBottomColor: clayColors.whiteBevel,
     marginTop: 10,
-    ...shadows.card,
+    ...clayShadows.card,
   },
   emptyTitle: {
     fontFamily: typography.bold,
@@ -803,6 +834,6 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontFamily: typography.bold,
-    color: colors.primary,
+    color: '#2563EB',
   },
 });

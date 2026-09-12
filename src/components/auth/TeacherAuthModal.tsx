@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { authService, TeacherUser } from '../../services/authService';
 import type { ExamSettings } from '../../types/exam';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface TeacherAuthModalProps {
   visible: boolean;
@@ -101,13 +101,13 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
               {/* Header */}
               <View style={styles.header}>
                 <View style={styles.badgePill}>
-                  <ShieldCheck size={14} color={colors.primary} strokeWidth={2.4} />
+                  <ShieldCheck size={15} color="#1D4ED8" strokeWidth={2.4} />
                   <Text style={styles.badgeText}>PORTAL PENGAWAS CBT</Text>
                 </View>
                 <TouchableOpacity
                   onPress={handleClose}
                   style={styles.closeBtn}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <X size={16} color={colors.textMuted} />
@@ -117,33 +117,38 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
               {/* Title & Subtitle */}
               <Text style={styles.title}>Akses Ruang Pengawas</Text>
               <Text style={styles.subtitle}>
-                Masukkan 6 digit PIN Pengawas yang tertera pada paket bank soal kelas ini untuk langsung memantau pengerjaan siswa di ruangan Anda.
+                Masukkan 6 digit PIN Pengawas yang tertera pada paket bank soal kelas ini untuk langsung memantau pengerjaan siswa.
               </Text>
 
-              {/* Error Banner */}
-              {errorMsg ? (
+              {/* Error Message */}
+              {errorMsg && (
                 <View style={styles.errorBox}>
-                  <AlertCircle size={15} color={colors.danger} />
+                  <AlertCircle size={16} color="#DC2626" strokeWidth={2.4} />
                   <Text style={styles.errorText}>{errorMsg}</Text>
                 </View>
-              ) : null}
+              )}
 
               {/* Form Input 1: Nama Pengawas */}
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Nama Guru / Pengawas Ruang</Text>
+                <Text style={styles.label}>Nama Pengawas / Guru</Text>
                 <View style={styles.inputContainer}>
                   <View style={styles.leadingIcon} pointerEvents="none">
-                    <User size={16} color={nameFocused ? colors.primary : colors.textMuted} />
+                    <User size={16} color={nameFocused ? '#2563EB' : colors.textMuted} strokeWidth={2.2} />
                   </View>
                   <TextInput
                     ref={nameInputRef}
-                    style={[styles.input, styles.inputWithIcon, nameFocused && styles.inputFocused]}
+                    style={[
+                      styles.input,
+                      styles.inputWithIcon,
+                      nameFocused && styles.inputFocused,
+                    ]}
                     value={teacherName}
                     onChangeText={setTeacherName}
                     onFocus={() => setNameFocused(true)}
                     onBlur={() => setNameFocused(false)}
-                    placeholder="Contoh: Bpk. Rahmat, S.Pd."
+                    placeholder="Nama Pengawas"
                     placeholderTextColor={colors.textSubtle}
+                    autoCapitalize="words"
                     returnKeyType="next"
                     onSubmitEditing={() => pinInputRef.current?.focus()}
                   />
@@ -159,16 +164,16 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                       setPin('123456');
                       setErrorMsg(null);
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
                     style={styles.presetChip}
                   >
-                    <Sparkles size={11} color={colors.primary} />
+                    <Sparkles size={11} color="#1D4ED8" strokeWidth={2.2} />
                     <Text style={styles.presetText}>Master PIN: 123456</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.inputContainer}>
                   <View style={styles.leadingIcon} pointerEvents="none">
-                    <Lock size={16} color={pinFocused ? colors.primary : colors.textMuted} />
+                    <Lock size={16} color={pinFocused ? '#2563EB' : colors.textMuted} strokeWidth={2.2} />
                   </View>
                   <TextInput
                     ref={pinInputRef}
@@ -185,7 +190,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                     }}
                     onFocus={() => setPinFocused(true)}
                     onBlur={() => setPinFocused(false)}
-                    placeholder="6 Digit PIN Pengawas Ruang"
+                    placeholder="6 Digit PIN Pengawas"
                     placeholderTextColor={colors.textSubtle}
                     keyboardType="default"
                     secureTextEntry={!showPin}
@@ -196,7 +201,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                   <TouchableOpacity
                     onPress={() => setShowPin(!showPin)}
                     style={styles.trailingIconBtn}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
                   >
                     {showPin ? (
                       <EyeOff size={16} color={colors.textMuted} />
@@ -215,7 +220,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                 </View>
                 <View style={styles.inputContainer}>
                   <View style={styles.leadingIcon} pointerEvents="none">
-                    <Layers size={16} color={tokenFocused ? colors.primary : colors.textMuted} />
+                    <Layers size={16} color={tokenFocused ? '#2563EB' : colors.textMuted} strokeWidth={2.2} />
                   </View>
                   <TextInput
                     ref={tokenInputRef}
@@ -232,7 +237,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                     }}
                     onFocus={() => setTokenFocused(true)}
                     onBlur={() => setTokenFocused(false)}
-                    placeholder="Contoh: 849201 (Token Siswa Kelas Ini)"
+                    placeholder="Contoh: 123456 (Token Siswa)"
                     placeholderTextColor={colors.textSubtle}
                     keyboardType="default"
                     maxLength={6}
@@ -254,7 +259,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                 ) : (
                   <View style={styles.btnContent}>
                     <Text style={styles.submitBtnText}>Masuk Dashboard Pengawas</Text>
-                    <ArrowRight size={15} color="#ffffff" strokeWidth={2.4} />
+                    <ArrowRight size={16} color="#ffffff" strokeWidth={2.6} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -262,7 +267,7 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
               <TouchableOpacity
                 style={styles.cancelBtn}
                 onPress={handleClose}
-                activeOpacity={0.7}
+                activeOpacity={0.75}
               >
                 <Text style={styles.cancelBtnText}>Kembali ke Mode Siswa</Text>
               </TouchableOpacity>
@@ -277,25 +282,27 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
   },
   kavWrapper: {
     width: '100%',
-    maxWidth: 390,
+    maxWidth: 400,
     alignItems: 'center',
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.xl,
-    padding: 22,
+    backgroundColor: '#FFFFFF',
+    borderRadius: clayRadii.modal,
+    padding: 24,
     width: '100%',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.modal,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: clayColors.whiteBevel,
+    ...clayShadows.cardHover,
   },
   header: {
     flexDirection: 'row',
@@ -307,27 +314,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 4.5,
-    borderRadius: radii.full,
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderRadius: clayRadii.badge,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
+    ...clayShadows.badge,
   },
   badgeText: {
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     fontSize: 10,
-    color: colors.primaryDark,
+    color: '#1D4ED8',
     letterSpacing: 0.4,
   },
   closeBtn: {
-    padding: 6,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
   },
   title: {
-    fontFamily: typography.bold,
-    fontSize: 17,
+    fontFamily: typography.extraBold,
+    fontSize: 18,
     color: colors.textPrimary,
     letterSpacing: -0.2,
     marginBottom: 3,
@@ -342,19 +359,21 @@ const styles = StyleSheet.create({
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dangerLight,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
+    backgroundColor: '#FFF1F2',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#FECDD3',
     gap: 8,
     marginBottom: 12,
   },
   errorText: {
-    fontFamily: typography.medium,
+    fontFamily: typography.bold,
     fontSize: 11.5,
-    color: colors.dangerText,
+    color: '#9F1239',
     flex: 1,
   },
   formGroup: {
@@ -367,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   label: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 11.5,
     color: colors.textSecondary,
   },
@@ -375,17 +394,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radii.xs,
-    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: clayRadii.badge,
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: '#BFDBFE',
   },
   presetText: {
     fontFamily: typography.bold,
     fontSize: 10,
-    color: colors.primary,
+    color: '#1D4ED8',
   },
   optionalHelperText: {
     fontFamily: typography.medium,
@@ -399,53 +418,61 @@ const styles = StyleSheet.create({
   },
   leadingIcon: {
     position: 'absolute',
-    left: 12,
+    left: 14,
     zIndex: 2,
   },
   trailingIconBtn: {
     position: 'absolute',
-    right: 8,
+    right: 10,
     zIndex: 2,
     padding: 6,
   },
   input: {
-    backgroundColor: colors.bgApp,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radii.md,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#CBD5E1',
+    borderRadius: clayRadii.input,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 13,
     fontFamily: typography.medium,
     color: colors.textPrimary,
     width: '100%',
   },
   inputWithIcon: {
-    paddingLeft: 38,
+    paddingLeft: 42,
     paddingRight: 40,
   },
   inputFocused: {
-    borderColor: colors.primary,
-    backgroundColor: colors.bgSurface,
+    borderColor: '#BFDBFE',
+    borderBottomColor: '#2563EB',
+    backgroundColor: '#FFFFFF',
   },
   pinInput: {
     letterSpacing: 4,
-    fontFamily: typography.bold,
+    fontFamily: typography.extraBold,
     fontSize: 14.5,
+    color: '#1D4ED8',
   },
   tokenInput: {
     letterSpacing: 2,
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 13,
   },
   submitBtn: {
-    height: 46,
-    backgroundColor: colors.primary,
-    borderRadius: radii.md,
+    height: 50,
+    backgroundColor: clayColors.primaryBtnBg,
+    borderRadius: clayRadii.button,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    ...shadows.primaryBtn,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: clayColors.primaryBtnBorder,
+    borderBottomWidth: 5,
+    borderBottomColor: clayColors.primaryBtnBevel,
+    ...clayShadows.btnPrimary,
   },
   btnContent: {
     flexDirection: 'row',
@@ -455,18 +482,18 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontFamily: typography.bold,
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 13.5,
     letterSpacing: 0.1,
     includeFontPadding: false,
   },
   cancelBtn: {
-    height: 36,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
   cancelBtnText: {
-    fontFamily: typography.medium,
+    fontFamily: typography.bold,
     fontSize: 12,
     color: colors.textMuted,
   },

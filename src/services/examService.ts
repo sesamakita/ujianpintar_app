@@ -28,19 +28,35 @@ export const examService = {
     try {
       const cleanToken = token.trim().toUpperCase();
 
-      // 1. Query exams table by token (only active / published exams)
+      // 1. Query exams table by token
       const { data: exam, error: examError } = await supabase
         .from('exams')
         .select('*')
         .eq('token', cleanToken)
-        .in('status', ['published', 'active'])
-        .single();
+        .maybeSingle();
 
       if (examError || !exam) {
         return {
           exam: null,
           questions: [],
-          error: `Token PIN '${cleanToken}' tidak ditemukan atau sudah kedaluwarsa/dinonaktifkan oleh guru.`,
+          error: `Token PIN '${cleanToken}' tidak ditemukan atau tidak valid.`,
+        };
+      }
+
+      // Validasi status akses paket ujian
+      if (exam.status === 'closed') {
+        return {
+          exam: null,
+          questions: [],
+          error: 'Akses ujian sedang ditutup oleh guru pengawas. Sesi ujian saat ini tidak aktif atau belum dibuka.',
+        };
+      }
+
+      if (exam.status && exam.status !== 'published' && exam.status !== 'active') {
+        return {
+          exam: null,
+          questions: [],
+          error: 'Paket ujian belum dibuka untuk umum atau masih dalam status draf.',
         };
       }
 
@@ -135,6 +151,79 @@ export const examService = {
       return { exam: formattedExam, questions: formattedQuestions, error: null };
     } catch (err: any) {
       return { exam: null, questions: [], error: err.message || 'Gagal terhubung ke database Supabase.' };
+    }
+  },
+
+  /**
+   * Gatekeeper: Check if a student is allowed to enter or resume an exam session
+   * Blocks students who have already submitted or were expelled until the teacher resets the session
+   */
+  async checkStudentSessionAccess(examId: string, studentNisn: string): Promise<{
+    allowed: boolean;
+    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working';
+    message?: string;
+    existingSession?: any;
+  }> {
+    try {
+      const cleanNisn = studentNisn.trim();
+      const isValidUUID = (str?: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+
+      let query = supabase
+        .from('student_sessions')
+        .select('*')
+        .eq('nisn', cleanNisn);
+
+      if (examId && isValidUUID(examId)) {
+        query = query.eq('exam_id', examId);
+      }
+
+      const { data: sessions, error } = await query.order('created_at', { ascending: false }).limit(1);
+
+      if (error || !sessions || sessions.length === 0) {
+        // Belum pernah mengerjakan ujian ini -> Izinkan pengerjaan baru
+        return { allowed: true };
+      }
+
+      const session = sessions[0];
+
+      if (session.status === 'submitted') {
+        return {
+          allowed: false,
+          reason: 'submitted',
+          message: 'Akses Terkunci: Anda telah menyelesaikan dan mengumpulkan ujian ini. Anda tidak dapat masuk kembali kecuali sesi Anda di-reset oleh guru pengawas.',
+          existingSession: session,
+        };
+      }
+
+      if (session.status === 'violation_flagged') {
+        return {
+          allowed: false,
+          reason: 'violation_flagged',
+          message: 'Akses Ditolak: Anda telah dikeluarkan dari sesi ujian oleh guru pengawas karena pelanggaran integritas. Hubungi guru pengawas untuk meminta reset sesi ujian.',
+          existingSession: session,
+        };
+      }
+
+      if (session.status === 'timed_out') {
+        return {
+          allowed: false,
+          reason: 'timed_out',
+          message: 'Akses Ditutup: Waktu pengerjaan ujian Anda telah habis.',
+          existingSession: session,
+        };
+      }
+
+      // Status 'working': Siswa sedang aktif (misal HP crash/restart) -> Izinkan lanjut (resume)
+      return {
+        allowed: true,
+        reason: 'active_working',
+        existingSession: session,
+      };
+    } catch (err: any) {
+      console.warn('checkStudentSessionAccess exception:', err);
+      // Jika terjadi kendala koneksi, izinkan agar siswa tidak terhambat ujian offline
+      return { allowed: true };
     }
   },
 

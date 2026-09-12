@@ -26,11 +26,11 @@ export const colors = {
   textMuted: '#64748b', // Slate 500
   textSubtle: '#94a3b8', // Slate 400
 
-  // Backgrounds & Cards
-  bgApp: '#f8fafc', // Slate 50
+  // Backgrounds & Cards (Claymorphism Canvas)
+  bgApp: '#EDF2F7', // Clay soft slate canvas
   bgSurface: '#ffffff', // Pure White
   bgCardSubtle: '#f1f5f9', // Slate 100
-  bgElevated: '#f8fafc',
+  bgElevated: '#ffffff',
 
   // Borders
   borderLight: '#f1f5f9',
@@ -99,3 +99,5 @@ export const radii = {
   xl: 24,
   full: 9999,
 } as const;
+
+export * from './clay';

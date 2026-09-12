@@ -9,7 +9,7 @@ import {
   Lock,
   X,
 } from 'lucide-react-native';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 export type ModalType = 'confirm' | 'danger' | 'warning' | 'success' | 'info' | 'time' | 'lock';
 
@@ -50,73 +50,80 @@ export const CustomModal: React.FC<CustomModalProps> = ({
     switch (type) {
       case 'danger':
         return {
-          icon: <AlertTriangle size={24} color={colors.danger} strokeWidth={2.2} />,
-          bg: colors.dangerLight,
-          border: colors.dangerBorder,
-          btnBg: colors.danger,
+          icon: <AlertTriangle size={26} color="#DC2626" strokeWidth={2.4} />,
+          bg: '#FFF1F2',
+          bevel: '#FECDD3',
+          btnBg: clayColors.dangerBtnBg,
+          btnBevel: clayColors.dangerBtnBevel,
         };
       case 'warning':
         return {
-          icon: <AlertTriangle size={24} color={colors.warning} strokeWidth={2.2} />,
-          bg: colors.warningLight,
-          border: colors.warningBorder,
-          btnBg: colors.warning,
+          icon: <AlertTriangle size={26} color="#D97706" strokeWidth={2.4} />,
+          bg: '#FFFBEB',
+          bevel: '#FDE68A',
+          btnBg: clayColors.warningBtnBg,
+          btnBevel: clayColors.warningBtnBevel,
         };
       case 'success':
         return {
-          icon: <CheckCircle2 size={24} color={colors.success} strokeWidth={2.2} />,
-          bg: colors.successLight,
-          border: colors.successBorder,
-          btnBg: colors.success,
+          icon: <CheckCircle2 size={26} color="#059669" strokeWidth={2.4} />,
+          bg: '#ECFDF5',
+          bevel: '#A7F3D0',
+          btnBg: clayColors.studentBtnBg,
+          btnBevel: clayColors.studentBtnBevel,
         };
       case 'time':
         return {
-          icon: <Clock size={24} color={colors.primary} strokeWidth={2.2} />,
-          bg: colors.primaryLight,
-          border: colors.primaryBorder,
-          btnBg: colors.primary,
+          icon: <Clock size={26} color="#2563EB" strokeWidth={2.4} />,
+          bg: '#EFF6FF',
+          bevel: '#BFDBFE',
+          btnBg: clayColors.primaryBtnBg,
+          btnBevel: clayColors.primaryBtnBevel,
         };
       case 'lock':
         return {
-          icon: <Lock size={24} color={colors.danger} strokeWidth={2.2} />,
-          bg: colors.dangerLight,
-          border: colors.dangerBorder,
-          btnBg: colors.danger,
+          icon: <Lock size={26} color="#DC2626" strokeWidth={2.4} />,
+          bg: '#FFF1F2',
+          bevel: '#FECDD3',
+          btnBg: clayColors.dangerBtnBg,
+          btnBevel: clayColors.dangerBtnBevel,
         };
       case 'confirm':
         return {
-          icon: <HelpCircle size={24} color={colors.primary} strokeWidth={2.2} />,
-          bg: colors.primaryLight,
-          border: colors.primaryBorder,
-          btnBg: colors.primary,
+          icon: <HelpCircle size={26} color="#2563EB" strokeWidth={2.4} />,
+          bg: '#EFF6FF',
+          bevel: '#BFDBFE',
+          btnBg: clayColors.primaryBtnBg,
+          btnBevel: clayColors.primaryBtnBevel,
         };
       case 'info':
       default:
         return {
-          icon: <Info size={24} color={colors.primary} strokeWidth={2.2} />,
-          bg: colors.primaryLight,
-          border: colors.primaryBorder,
-          btnBg: colors.primary,
+          icon: <Info size={26} color="#2563EB" strokeWidth={2.4} />,
+          bg: '#EFF6FF',
+          bevel: '#BFDBFE',
+          btnBg: clayColors.primaryBtnBg,
+          btnBevel: clayColors.primaryBtnBevel,
         };
     }
   };
 
-  const { icon, bg, border, btnBg } = getIconAndColors();
+  const { icon, bg, bevel, btnBg, btnBevel } = getIconAndColors();
   const showCancel = !!cancelText || (type === 'confirm' || type === 'danger' || type === 'lock' || type === 'time');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View style={styles.card}>
-          {/* Close button if needed */}
+          {/* Close button */}
           {onClose && !showCancel && (
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.75}>
               <X size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
 
-          {/* Icon Box */}
-          <View style={[styles.iconBox, { backgroundColor: bg, borderColor: border }]}>
+          {/* 3D Icon Pod */}
+          <View style={[styles.iconBox, { backgroundColor: bg, borderBottomColor: bevel }]}>
             {icon}
           </View>
 
@@ -131,7 +138,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({
                 style={styles.cancelBtn}
                 onPress={handleClose}
                 disabled={loading}
-                activeOpacity={0.75}
+                activeOpacity={0.8}
               >
                 <Text style={styles.cancelBtnText}>{cancelText || 'Batal'}</Text>
               </TouchableOpacity>
@@ -140,7 +147,7 @@ export const CustomModal: React.FC<CustomModalProps> = ({
             <TouchableOpacity
               style={[
                 styles.confirmBtn,
-                { backgroundColor: btnBg },
+                { backgroundColor: btnBg, borderBottomColor: btnBevel },
                 !showCancel && styles.confirmBtnFull,
               ]}
               onPress={onConfirm || handleClose}
@@ -163,44 +170,56 @@ export const CustomModal: React.FC<CustomModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 22,
   },
   card: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.xl,
-    padding: 22,
+    backgroundColor: '#FFFFFF',
+    borderRadius: clayRadii.modal,
+    padding: 24,
     width: '100%',
     maxWidth: 380,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: clayColors.whiteBevel,
     position: 'relative',
-    ...shadows.modal,
+    ...clayShadows.cardHover,
   },
   closeBtn: {
     position: 'absolute',
     top: 14,
     right: 14,
-    padding: 6,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bgCardSubtle,
-  },
-  iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: radii.lg,
-    borderWidth: 1.5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
-    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#CBD5E1',
+  },
+  iconBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 22,
+    borderWidth: 2.2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    marginTop: 2,
+    ...clayShadows.iconPod,
   },
   title: {
     fontFamily: typography.bold,
-    fontSize: 17,
+    fontSize: 17.5,
     color: colors.textPrimary,
     textAlign: 'center',
     letterSpacing: -0.2,
@@ -212,38 +231,44 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
-    marginBottom: 20,
-    paddingHorizontal: 8,
+    marginBottom: 22,
+    paddingHorizontal: 6,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     width: '100%',
   },
   cancelBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: radii.md,
-    backgroundColor: colors.bgCardSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
+    height: 48,
+    borderRadius: clayRadii.button,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 4.5,
+    borderBottomColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...clayShadows.badge,
   },
   cancelBtnText: {
-    fontFamily: typography.semiBold,
-    fontSize: 13,
+    fontFamily: typography.bold,
+    fontSize: 13.5,
     color: colors.textSecondary,
     includeFontPadding: false,
   },
   confirmBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: radii.md,
+    height: 48,
+    borderRadius: clayRadii.button,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.card,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    borderBottomWidth: 4.5,
+    ...clayShadows.btnPrimary,
   },
   confirmBtnFull: {
     flex: undefined,
@@ -251,7 +276,7 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     fontFamily: typography.bold,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#ffffff',
     letterSpacing: 0.1,
     includeFontPadding: false,

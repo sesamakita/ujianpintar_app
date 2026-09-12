@@ -11,7 +11,6 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 
 import type { ExamSettings, Question, GradeRecord } from './src/types/exam';
-import { HeaderBar } from './src/components/common/HeaderBar';
 import { RoleSelectorModal } from './src/components/auth/RoleSelectorModal';
 import { TeacherAuthModal } from './src/components/auth/TeacherAuthModal';
 import { WelcomeScreen } from './src/components/welcome/WelcomeScreen';
@@ -25,7 +24,7 @@ import { ScoringEngine } from './src/services/scoringEngine';
 import { examService } from './src/services/examService';
 import { storage } from './src/lib/storage';
 import type { TeacherUser } from './src/services/authService';
-import { colors } from './src/theme';
+import { colors, clayColors } from './src/theme';
 
 export default function App() {
   // Load Plus Jakarta Sans Google Fonts
@@ -428,19 +427,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" translucent={false} />
-
-        {/* Global Header Bar (Only active in Teacher Proctoring Mode) */}
-        {currentRole === 'teacher' ? (
-          <HeaderBar
-            title="UjianPintar Pengawas"
-            subtitle={`${teacherUser?.name || 'Guru Penguji'} • ${activeExam.subject} (PIN: ${activeExam.token})`}
-            currentRole={currentRole}
-            onSwitchRole={() => setIsRoleModalOpen(true)}
-            showRoleSwitch={true}
-          />
-        ) : null}
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
         {/* Main View Router */}
         <View style={styles.mainContainer}>
@@ -450,15 +438,13 @@ export default function App() {
               {studentStep === 0 && (
                 <WelcomeScreen
                   onSelectStudent={() => setStudentStep(1)}
-                  onSelectTeacher={() => setIsTeacherAuthOpen(true)}
                 />
               )}
 
               {studentStep === 1 && (
                 <StudentQuickEntry
                   onSuccess={handleStudentEntrySuccess}
-                  onSwitchToTeacher={() => setIsTeacherAuthOpen(true)}
-                  onBack={() => setStudentStep(0)}
+                  onTeacherSuccess={handleTeacherAuthSuccess}
                 />
               )}
 
@@ -522,6 +508,7 @@ export default function App() {
                   onSelectExam={(selected) => {
                     setActiveExam(selected);
                   }}
+                  onSwitchRole={() => setIsRoleModalOpen(true)}
                 />
               )}
 
@@ -561,12 +548,12 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: clayColors.canvas,
     width: '100%',
   },
   mainContainer: {
     flex: 1,
-    backgroundColor: colors.bgApp,
+    backgroundColor: clayColors.canvas,
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 520 : '100%',
     alignSelf: 'center',

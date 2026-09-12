@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ShieldCheck, Award, Home, Lock, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react-native';
 import type { GradeRecord } from '../../types/exam';
-import { typography, colors, radii, shadows } from '../../theme';
+import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface StudentResultViewProps {
   gradeRecord: GradeRecord;
@@ -19,13 +20,19 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   onRetrySync,
   onResetToHome,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 14;
   const isPassed = gradeRecord.status === 'Lulus';
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Success Badge */}
+    <ScrollView
+      style={styles.scrollRoot}
+      contentContainerStyle={[styles.container, { paddingTop: topPadding }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* 3D Success Badge */}
       <View style={styles.iconCircle}>
-        <Check size={32} color="#ffffff" strokeWidth={3} />
+        <Check size={34} color="#ffffff" strokeWidth={3.5} />
       </View>
 
       <Text style={styles.title}>Ujian Berhasil Dikumpulkan</Text>
@@ -36,7 +43,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
       {/* Sync Status Banner */}
       {syncStatus === 'synced' && (
         <View style={styles.syncBannerSuccess}>
-          <CheckCircle2 size={15} color={colors.successText} />
+          <CheckCircle2 size={16} color="#065F46" strokeWidth={2.4} />
           <Text style={styles.syncBannerSuccessText}>Tersinkronisasi ke Server Pengawas</Text>
         </View>
       )}
@@ -44,7 +51,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
       {syncStatus === 'pending' && (
         <View style={styles.syncBannerPending}>
           <View style={styles.syncBannerPendingLeft}>
-            <CloudOff size={15} color={colors.warningText} />
+            <CloudOff size={16} color="#92400E" strokeWidth={2.4} />
             <Text style={styles.syncBannerPendingText}>Tersimpan Offline di HP</Text>
           </View>
           {onRetrySync && (
@@ -58,7 +65,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
 
       {syncStatus === 'syncing' && (
         <View style={styles.syncBannerSyncing}>
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color="#1D4ED8" />
           <Text style={styles.syncBannerSyncingText}>Menyinkronkan ke Server Pengawas...</Text>
         </View>
       )}
@@ -66,7 +73,9 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
       {/* Score Card */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Award size={17} color={colors.primary} />
+          <View style={styles.headerIconPod}>
+            <Award size={18} color="#2563EB" strokeWidth={2.4} />
+          </View>
           <Text style={styles.cardHeaderTitle}>Hasil Evaluasi CBT</Text>
         </View>
 
@@ -110,9 +119,9 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
         {/* SHA-256 Tamper-Proof Seal Box */}
         <View style={styles.sealBox}>
           <View style={styles.sealHeader}>
-            <Lock size={13} color={colors.primary} />
+            <Lock size={14} color="#1D4ED8" strokeWidth={2.4} />
             <Text style={styles.sealTitle}>Stempel Integritas SHA-256</Text>
-            <ShieldCheck size={14} color={colors.success} />
+            <ShieldCheck size={15} color="#059669" strokeWidth={2.4} />
           </View>
           <Text style={styles.sealHash} numberOfLines={2} ellipsizeMode="middle">
             {integritySeal}
@@ -125,7 +134,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
 
       {/* Return to Home Button */}
       <TouchableOpacity style={styles.homeBtn} onPress={onResetToHome} activeOpacity={0.85}>
-        <Home size={17} color="#ffffff" />
+        <Home size={18} color="#ffffff" strokeWidth={2.4} />
         <Text style={styles.homeBtnText}>Kembali ke Halaman Utama</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -133,76 +142,97 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
 };
 
 const styles = StyleSheet.create({
+  scrollRoot: {
+    flex: 1,
+    backgroundColor: clayColors.canvas,
+  },
   container: {
     padding: 20,
-    backgroundColor: colors.bgApp,
+    backgroundColor: clayColors.canvas,
     alignItems: 'center',
     minHeight: '100%',
+    paddingBottom: 40,
   },
   iconCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: radii.xl,
-    backgroundColor: colors.success,
+    width: 68,
+    height: 68,
+    borderRadius: 26,
+    backgroundColor: clayColors.studentBtnBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
     marginTop: 6,
-    ...shadows.card,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    borderBottomWidth: 5.5,
+    borderBottomColor: clayColors.studentBtnBevel,
+    ...clayShadows.btnStudent,
   },
   title: {
     fontFamily: typography.extraBold,
-    fontSize: 20,
+    fontSize: 21,
     color: colors.textPrimary,
     textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontFamily: typography.regular,
     fontSize: 12.5,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: 18.5,
     marginTop: 5,
     marginBottom: 20,
     maxWidth: 340,
   },
   card: {
-    backgroundColor: colors.bgSurface,
-    borderRadius: radii.xl,
+    backgroundColor: '#FFFFFF',
+    borderRadius: clayRadii.modal,
     padding: 22,
     width: '100%',
     maxWidth: 420,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 6,
+    borderBottomColor: clayColors.whiteBevel,
     alignItems: 'center',
     marginBottom: 20,
-    ...shadows.card,
+    ...clayShadows.cardHover,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: 6,
   },
+  headerIconPod: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardHeaderTitle: {
-    fontFamily: typography.bold,
-    fontSize: 11.5,
-    color: colors.primary,
+    fontFamily: typography.extraBold,
+    fontSize: 12,
+    color: '#2563EB',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   scoreRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
+    gap: 5,
     marginVertical: 4,
   },
   scoreNumber: {
     fontFamily: typography.extraBold,
-    fontSize: 48,
+    fontSize: 50,
     color: colors.textPrimary,
-    letterSpacing: -1,
+    letterSpacing: -1.2,
   },
   scoreMax: {
     fontFamily: typography.bold,
@@ -210,40 +240,46 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   statusPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: radii.full,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: clayRadii.badge,
     marginVertical: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    ...clayShadows.badge,
   },
   statusPassed: {
-    backgroundColor: colors.successLight,
-    borderColor: colors.successBorder,
+    backgroundColor: '#ECFDF5',
+    borderBottomColor: '#A7F3D0',
   },
   statusRemedial: {
-    backgroundColor: colors.dangerLight,
-    borderColor: colors.dangerBorder,
+    backgroundColor: '#FFF1F2',
+    borderBottomColor: '#FECDD3',
   },
   statusPillText: {
-    fontFamily: typography.bold,
-    fontSize: 11.5,
-    letterSpacing: 0.3,
+    fontFamily: typography.extraBold,
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
   textPassed: {
-    color: colors.successText,
+    color: '#065F46',
   },
   textRemedial: {
-    color: colors.dangerText,
+    color: '#9F1239',
   },
   detailsGrid: {
     width: '100%',
-    backgroundColor: colors.bgApp,
-    borderRadius: radii.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
     padding: 14,
     gap: 10,
-    marginVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    marginVertical: 14,
+    borderWidth: 1.8,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#CBD5E1',
+    ...clayShadows.badge,
   },
   detailItem: {
     flexDirection: 'row',
@@ -251,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailLabel: {
-    fontFamily: typography.regular,
+    fontFamily: typography.medium,
     fontSize: 12,
     color: colors.textMuted,
   },
@@ -261,68 +297,77 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   textDanger: {
-    color: colors.danger,
+    color: '#DC2626',
   },
   sealBox: {
     width: '100%',
-    backgroundColor: colors.primaryLight,
-    borderRadius: radii.md,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1.8,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#BFDBFE',
     alignItems: 'center',
+    ...clayShadows.badge,
   },
   sealHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     marginBottom: 4,
   },
   sealTitle: {
-    fontFamily: typography.bold,
-    fontSize: 10.5,
-    color: colors.primaryDark,
+    fontFamily: typography.extraBold,
+    fontSize: 11,
+    color: '#1D4ED8',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   sealHash: {
     fontSize: 10,
-    fontFamily: typography.semiBold,
-    color: colors.primaryDark,
-    backgroundColor: colors.bgSurface,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: radii.xs,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    fontFamily: typography.bold,
+    color: '#1E40AF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
     width: '100%',
     textAlign: 'center',
-    marginVertical: 5,
+    marginVertical: 6,
   },
   sealDesc: {
     fontFamily: typography.regular,
     fontSize: 10,
-    color: colors.primary,
+    color: '#1E40AF',
     textAlign: 'center',
     lineHeight: 14,
   },
   homeBtn: {
-    height: 48,
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.md,
-    paddingHorizontal: 22,
+    height: 52,
+    backgroundColor: '#1E293B',
+    borderRadius: clayRadii.button,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     width: '100%',
     maxWidth: 420,
-    ...shadows.card,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomWidth: 5,
+    borderBottomColor: '#0F172A',
+    ...clayShadows.cardHover,
   },
   homeBtnText: {
     fontFamily: typography.bold,
     color: '#ffffff',
-    fontSize: 13.5,
+    fontSize: 14,
     letterSpacing: 0.1,
     includeFontPadding: false,
   },
@@ -331,34 +376,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: colors.successLight,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#A7F3D0',
     marginBottom: 16,
     width: '100%',
     maxWidth: 420,
+    ...clayShadows.badge,
   },
   syncBannerSuccessText: {
     fontFamily: typography.bold,
     fontSize: 12,
-    color: colors.successText,
+    color: '#065F46',
   },
   syncBannerPending: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.warningLight,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
+    backgroundColor: '#FFFBEB',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 3,
+    borderBottomColor: '#FDE68A',
     marginBottom: 16,
     width: '100%',
     maxWidth: 420,
+    ...clayShadows.badge,
   },
   syncBannerPendingLeft: {
     flexDirection: 'row',
@@ -368,16 +419,18 @@ const styles = StyleSheet.create({
   syncBannerPendingText: {
     fontFamily: typography.bold,
     fontSize: 12,
-    color: colors.warningText,
+    color: '#92400E',
   },
   syncRetryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.warningText,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radii.sm,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   syncRetryBtnText: {
     fontFamily: typography.bold,
@@ -389,19 +442,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.primaryLight,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#BFDBFE',
     marginBottom: 16,
     width: '100%',
     maxWidth: 420,
+    ...clayShadows.badge,
   },
   syncBannerSyncingText: {
-    fontFamily: typography.semiBold,
+    fontFamily: typography.bold,
     fontSize: 12,
-    color: colors.primaryDark,
+    color: '#1D4ED8',
   },
 });
