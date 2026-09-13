@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Grid, Check, Bookmark } from 'lucide-react-native';
 import type { Question } from '../../types/exam';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
@@ -31,10 +32,13 @@ export const QuestionGridModal: React.FC<QuestionGridModalProps> = ({
   const doubtCount = Object.values(doubtAnswers).filter(Boolean).length;
   const unansweredCount = Math.max(0, questions.length - answeredCount);
 
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(22, (insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 28 : 16)) + 12);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: bottomPadding }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.titleRow}>

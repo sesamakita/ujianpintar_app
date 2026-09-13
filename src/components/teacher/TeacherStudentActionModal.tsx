@@ -7,7 +7,9 @@ import {
   TextInput,
   StyleSheet,
   Alert,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   X,
   Send,
@@ -64,10 +66,13 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
     setIsForceSubmitModalOpen(true);
   };
 
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(22, (insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 28 : 16)) + 12);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: bottomPadding }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>

@@ -27,6 +27,7 @@ import {
   clayShadows,
   clayRadii,
 } from '../../theme';
+import { UjianPintarLogo } from '../common/UjianPintarLogo';
 
 interface WelcomeScreenProps {
   onSelectStudent: () => void;
@@ -145,7 +146,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       {/* 1. TOP / APP BRAND HEADER */}
       <View style={styles.headerBox}>
         <View style={styles.logoBadge}>
-          <Sparkles size={30} color="#2563EB" strokeWidth={2.5} />
+          <UjianPintarLogo width={46} height={24} />
         </View>
         <View style={styles.brandTitleRow}>
           <Text style={styles.appTitle}>UjianPintar</Text>

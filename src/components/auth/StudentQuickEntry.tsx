@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -43,6 +44,27 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20)) + 16;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates?.height || 280);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Tab State: 'student' or 'teacher'
   const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
@@ -154,9 +176,17 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
       <ScrollView
-        contentContainerStyle={[styles.container, { paddingTop: topPadding }]}
+        ref={scrollViewRef}
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: topPadding,
+            paddingBottom: Math.max(40, keyboardHeight + 36),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
         bounces={false}
       >
         {/* Entry Form Card */}
@@ -339,7 +369,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     ]}
                     value={token}
                     onChangeText={(txt) => setToken(txt.replace(/[^0-9]/g, ''))}
-                    onFocus={() => setFocusedField('token')}
+                    onFocus={() => {
+                      setFocusedField('token');
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 120);
+                    }}
                     onBlur={() => setFocusedField(null)}
                     placeholder="PIN 6 DIGIT"
                     placeholderTextColor="#A7F3D0"
@@ -428,7 +463,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     ]}
                     value={teacherTokenPin}
                     onChangeText={(txt) => setTeacherTokenPin(txt.replace(/[^0-9]/g, ''))}
-                    onFocus={() => setFocusedField('teacherTokenPin')}
+                    onFocus={() => {
+                      setFocusedField('teacherTokenPin');
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 120);
+                    }}
                     onBlur={() => setFocusedField(null)}
                     placeholder="PIN 6 DIGIT"
                     placeholderTextColor="#93C5FD"
