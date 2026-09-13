@@ -585,6 +585,24 @@ export const examService = {
   },
 
   /**
+   * Teacher Action: Clear all violation logs from database for an exam
+   */
+  async clearViolationLogsInDb(examId?: string) {
+    try {
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      let deleteQuery = supabase.from('violation_logs').delete();
+      if (examId && isValidUUID(examId)) {
+        deleteQuery = deleteQuery.eq('exam_id', examId);
+      } else {
+        deleteQuery = deleteQuery.not('id', 'is', null);
+      }
+      await deleteQuery;
+    } catch (err) {
+      console.warn('clearViolationLogsInDb error:', err);
+    }
+  },
+
+  /**
    * Teacher Action: Force submit single student in database
    */
   async forceSubmitStudentInDb(examId: string, studentNisn: string) {
