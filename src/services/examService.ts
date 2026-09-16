@@ -13,6 +13,54 @@ export const formatScheduleTime = (timeStr?: string): string => {
   return clean;
 };
 
+/**
+ * Helper to reliably dispatch Supabase Realtime broadcasts by ensuring channel subscription
+ */
+export async function sendRealtimeBroadcast(channelName: string, event: string, payload: any): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const channel = supabase.channel(channelName);
+    let isHandled = false;
+
+    const timeout = setTimeout(() => {
+      if (!isHandled) {
+        isHandled = true;
+        try { supabase.removeChannel(channel); } catch {}
+        resolve();
+      }
+    }, 2500);
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && !isHandled) {
+        try {
+          await channel.send({
+            type: 'broadcast',
+            event,
+            payload,
+          });
+        } catch (err) {
+          console.warn(`sendRealtimeBroadcast ${event} error:`, err);
+        } finally {
+          if (!isHandled) {
+            isHandled = true;
+            clearTimeout(timeout);
+            setTimeout(() => {
+              try { supabase.removeChannel(channel); } catch {}
+              resolve();
+            }, 300);
+          }
+        }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (!isHandled) {
+          isHandled = true;
+          clearTimeout(timeout);
+          try { supabase.removeChannel(channel); } catch {}
+          resolve();
+        }
+      }
+    });
+  });
+}
+
 export const examService = {
   /**
    * Helper to format time into HH:mm (removing seconds)
@@ -536,6 +584,7 @@ export const examService = {
    */
   async sendWarningToStudent(studentNisn: string, studentName: string, message: string, examId?: string) {
     try {
+      const cleanNisn = (studentNisn || '').trim();
       const nowStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const warningText = message.trim();
 
@@ -543,39 +592,29 @@ export const examService = {
       await supabase.from('violation_logs').insert({
         exam_id: (examId && examId !== 'all') ? examId : null,
         student_name: studentName,
-        student_nisn: studentNisn,
+        student_nisn: cleanNisn,
         timestamp: nowStr,
         message: `Peringatan Pengawas: "${warningText}"`,
         severity: 'warning',
       });
 
       // 2. Realtime Broadcast to student's personal channel
-      const alertChannel = supabase.channel(`student-alerts-${studentNisn}`);
-      await alertChannel.send({
-        type: 'broadcast',
-        event: 'teacher_warning',
-        payload: {
-          studentNisn,
-          studentName,
-          message: warningText,
-          timestamp: nowStr,
-          examId: examId || null,
-        },
+      await sendRealtimeBroadcast(`student-alerts-${cleanNisn}`, 'teacher_warning', {
+        studentNisn: cleanNisn,
+        studentName,
+        message: warningText,
+        timestamp: nowStr,
+        examId: examId || null,
       });
 
       // 3. Class-wide broadcast
       if (examId && examId !== 'all') {
-        const classChannel = supabase.channel(`exam-alerts-${examId}`);
-        await classChannel.send({
-          type: 'broadcast',
-          event: 'teacher_warning',
-          payload: {
-            studentNisn,
-            studentName,
-            message: warningText,
-            timestamp: nowStr,
-            examId,
-          },
+        await sendRealtimeBroadcast(`exam-alerts-${examId}`, 'teacher_warning', {
+          studentNisn: cleanNisn,
+          studentName,
+          message: warningText,
+          timestamp: nowStr,
+          examId,
         });
       }
     } catch (err) {
@@ -659,6 +698,7 @@ export const examService = {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const validExamId = isValidUUID(examId) ? examId : null;
+      const cleanNisn = (studentNisn || '').trim();
 
       let updateQuery = supabase
         .from('student_sessions')
@@ -667,12 +707,18 @@ export const examService = {
           remaining_seconds: 0,
           submitted_at: new Date().toISOString(),
         })
-        .eq('nisn', studentNisn);
+        .eq('nisn', cleanNisn);
 
       if (validExamId) {
         updateQuery = updateQuery.eq('exam_id', validExamId);
       }
       await updateQuery;
+
+      // Broadcast force submit command to student reliably
+      await sendRealtimeBroadcast(`student-alerts-${cleanNisn}`, 'force_submit', {
+        studentNisn: cleanNisn,
+        examId: validExamId,
+      });
     } catch (err) {
       console.warn('Force submit error:', err);
     }
@@ -716,6 +762,13 @@ export const examService = {
         message: `Pengawas menambahkan waktu ujian serentak (+${addedMinutes} Menit)`,
         severity: 'info',
       });
+
+      // Broadcast time extension event reliably
+      const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
+      await sendRealtimeBroadcast(channelName, 'add_time', {
+        addedMinutes,
+        examId: validExamId,
+      });
     } catch (err) {
       console.warn('Add global time error:', err);
     }
@@ -752,6 +805,12 @@ export const examService = {
         timestamp: nowStr,
         message: 'Ujian telah dikunci dan ditutup serentak oleh pengawas.',
         severity: 'danger',
+      });
+
+      // Broadcast lock event reliably
+      const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
+      await sendRealtimeBroadcast(channelName, 'lock_exam', {
+        examId: validExamId,
       });
     } catch (err) {
       console.warn('Lock all exams error:', err);
@@ -914,6 +973,21 @@ export const examService = {
   },
 
   /**
+   * Helper to query current session status for polling fallback
+   */
+  async getStudentSessionStatus(nisn: string, examId?: string): Promise<string | null> {
+    try {
+      const cleanNisn = (nisn || '').trim();
+      let query = supabase.from('student_sessions').select('status').eq('nisn', cleanNisn);
+      if (examId) query = query.eq('exam_id', examId);
+      const { data } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+      return data?.status || null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * Subscribe to Live Teacher Commands / Warnings for Student Device
    */
   subscribeToStudentAlerts(
@@ -932,7 +1006,7 @@ export const examService = {
         if (payload?.payload?.message) {
           onWarning({
             message: payload.payload.message,
-            timestamp: payload.payload.timestamp || new Date().toLocaleTimeString(),
+            timestamp: payload.payload.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             studentName: payload.payload.studentName,
           });
         }
@@ -950,15 +1024,34 @@ export const examService = {
         },
         (payload: any) => {
           if (payload.new && payload.new.message) {
-            onWarning({
-              message: payload.new.message,
-              timestamp: payload.new.timestamp || new Date().toLocaleTimeString(),
-              studentName: payload.new.student_name,
-            });
+            const msg = payload.new.message;
+            if (msg.includes('Peringatan Pengawas') || payload.new.severity === 'warning') {
+              onWarning({
+                message: msg,
+                timestamp: payload.new.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                studentName: payload.new.student_name,
+              });
+            }
           }
         }
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'student_sessions',
+          filter: `nisn=eq.${cleanNisn}`,
+        },
+        (payload: any) => {
+          if (payload.new && (payload.new.status === 'submitted' || payload.new.status === 'violation_flagged')) {
+            if (onForceSubmit) onForceSubmit();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[Realtime] personalChannel status for ${cleanNisn}:`, status);
+      });
 
     // 2. Channel for Class-wide / Global Alerts (exam-alerts-[examId])
     const classChannel = supabase
@@ -968,7 +1061,7 @@ export const examService = {
         if (p && (p.studentNisn === cleanNisn || p.studentNisn === 'ALL' || p.studentNisn === '-')) {
           onWarning({
             message: p.message,
-            timestamp: p.timestamp || new Date().toLocaleTimeString(),
+            timestamp: p.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             studentName: p.studentName,
           });
         }
@@ -982,7 +1075,9 @@ export const examService = {
       .on('broadcast', { event: 'lock_exam' }, () => {
         if (onForceSubmit) onForceSubmit();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] classChannel status for ${examId}:`, status);
+      });
 
     return () => {
       supabase.removeChannel(personalChannel);

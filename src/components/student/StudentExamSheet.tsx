@@ -148,9 +148,11 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
   useEffect(() => {
     if (!exam.id || !nisn) return;
 
+    const cleanNisn = (nisn || '').trim();
+
     const unsubscribe = examService.subscribeToStudentAlerts(
       exam.id,
-      nisn,
+      cleanNisn,
       (alert) => {
         // Trigger Vibration alert on device
         try {
@@ -169,7 +171,6 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
           addTime(addedMinutes * 60);
 
           // Update persisted end time in local storage
-          const cleanNisn = (nisn || '').trim();
           const endTimeKey = `cbt_exam_end_time_${exam.id}_${cleanNisn}`;
           storage.getItem<number>(endTimeKey).then((saved) => {
             const currentTarget = saved && saved > Date.now() ? saved : Date.now();
@@ -183,8 +184,20 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
       }
     );
 
+    // Redundant Polling Heartbeat: Check status every 3.5 seconds
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await examService.getStudentSessionStatus(cleanNisn, exam.id);
+        if (status === 'submitted' || status === 'violation_flagged') {
+          clearInterval(pollInterval);
+          handleForceSubmit();
+        }
+      } catch {}
+    }, 3500);
+
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(pollInterval);
     };
   }, [exam.id, nisn, addTime]);
 

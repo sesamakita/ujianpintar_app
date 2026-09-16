@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   StatusBar,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -27,7 +28,6 @@ import {
   clayShadows,
   clayRadii,
 } from '../../theme';
-import { UjianPintarLogo } from '../common/UjianPintarLogo';
 
 interface WelcomeScreenProps {
   onSelectStudent: () => void;
@@ -146,13 +146,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       {/* 1. TOP / APP BRAND HEADER */}
       <View style={styles.headerBox}>
         <View style={styles.logoBadge}>
-          <UjianPintarLogo width={46} height={24} />
-        </View>
-        <View style={styles.brandTitleRow}>
-          <Text style={styles.appTitle}>UjianPintar</Text>
-          <View style={styles.versionBadge}>
-            <Text style={styles.versionText}>CBT v2.0</Text>
-          </View>
+          <Image
+            source={require('../../../assets/logo-up.png')}
+            style={styles.badgeLogo}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.appTagline}>
           Portal Asesmen Berbasis Komputer Terstandar, Tangguh & Aman
@@ -259,43 +257,19 @@ const styles = StyleSheet.create({
     borderBottomColor: '#BFDBFE',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     ...clayShadows.logo,
   },
-  brandTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  appTitle: {
-    fontFamily: typography.extraBold,
-    fontSize: 25,
-    color: colors.textPrimary,
-    letterSpacing: -0.6,
-  },
-  versionBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: clayRadii.badge,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    borderBottomWidth: 3,
-    borderBottomColor: '#BFDBFE',
-    ...clayShadows.badge,
-  },
-  versionText: {
-    fontFamily: typography.extraBold,
-    fontSize: 10,
-    color: '#1D4ED8',
-    letterSpacing: 0.3,
+  badgeLogo: {
+    width: 48,
+    height: 25,
   },
   appTagline: {
     fontFamily: typography.medium,
     fontSize: 12.5,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 2,
     maxWidth: 320,
     lineHeight: 18,
   },

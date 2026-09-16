@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, ActivityIndicator, Platform } from 'react-native';
+import { View, StyleSheet, StatusBar, ActivityIndicator, Platform, Image } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -35,6 +35,16 @@ export default function App() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
+
+  // Splash Screen Display Timer (3 Seconds)
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSplashVisible(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Application Modes
   const [currentRole, setCurrentRole] = useState<'student' | 'teacher'>('student');
@@ -439,10 +449,15 @@ export default function App() {
     }
   };
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isSplashVisible) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
+        <Image
+          source={require('./assets/splash-icon.png')}
+          style={styles.splashImage}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -564,9 +579,13 @@ export default function App() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: colors.bgApp,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  splashImage: {
+    width: 240,
+    height: 240,
   },
   safeArea: {
     flex: 1,
