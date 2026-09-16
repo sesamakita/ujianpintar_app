@@ -503,7 +503,8 @@ export const examService = {
           .from('student_sessions')
           .update({
             violation_count: newCount,
-            status: newCount >= 2 ? 'violation_flagged' : 'working',
+            // Pelanggaran dicatat untuk audit trail guru, sesi tetap 'working' (submit paksa manual oleh guru)
+            status: 'working',
           })
           .eq('id', session.id);
       }
@@ -515,7 +516,19 @@ export const examService = {
   /**
    * Submit final grade record to Supabase grade_records table
    */
-  async submitGradeRecord(grade: GradeRecord, examId: string, sessionId?: string) {
+  async submitGradeRecord(
+    grade: GradeRecord,
+    examId: string,
+    sessionId?: string,
+    answers?: Array<{
+      questionId: string;
+      selectedOptionId?: string;
+      answerText?: string;
+      isDoubt?: boolean;
+      isCorrect?: boolean;
+      scoreEarned?: number;
+    }>
+  ) {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const cleanNisn = grade.nisn.trim();
@@ -573,6 +586,32 @@ export const examService = {
         await supabase
           .from('grade_records')
           .insert(gradePayload);
+      }
+
+      // 3. Batch upsert full student answers to student_answers table for complete audit
+      if (sessionId && isValidUUID(sessionId) && Array.isArray(answers) && answers.length > 0) {
+        try {
+          const nowIso = new Date().toISOString();
+          const answerRows = answers
+            .filter((a) => a.questionId && isValidUUID(a.questionId))
+            .map((a) => ({
+              session_id: sessionId,
+              question_id: a.questionId,
+              selected_option_id: a.selectedOptionId || null,
+              answer_text: a.answerText || null,
+              is_doubt: !!a.isDoubt,
+              is_correct: typeof a.isCorrect === 'boolean' ? a.isCorrect : null,
+              score_earned: typeof a.scoreEarned === 'number' ? a.scoreEarned : null,
+              answered_at: nowIso,
+            }));
+
+          if (answerRows.length > 0) {
+            await supabase.from('student_answers').delete().eq('session_id', sessionId);
+            await supabase.from('student_answers').insert(answerRows);
+          }
+        } catch (ansErr) {
+          console.warn('Batch answers sync warning:', ansErr);
+        }
       }
     } catch (err) {
       console.warn('Grade submit warning:', err);
@@ -1044,7 +1083,7 @@ export const examService = {
           filter: `nisn=eq.${cleanNisn}`,
         },
         (payload: any) => {
-          if (payload.new && (payload.new.status === 'submitted' || payload.new.status === 'violation_flagged')) {
+          if (payload.new && payload.new.status === 'submitted') {
             if (onForceSubmit) onForceSubmit();
           }
         }

@@ -188,7 +188,7 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
     const pollInterval = setInterval(async () => {
       try {
         const status = await examService.getStudentSessionStatus(cleanNisn, exam.id);
-        if (status === 'submitted' || status === 'violation_flagged') {
+        if (status === 'submitted') {
           clearInterval(pollInterval);
           handleForceSubmit();
         }

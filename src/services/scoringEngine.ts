@@ -14,6 +14,7 @@ export interface GradeResult {
   status: 'Lulus' | 'Remedial';
   correctCount: number;
   totalQuestions: number;
+  details?: Record<string, { isCorrect: boolean; pointsEarned: number }>;
 }
 
 export class ScoringEngine {
@@ -28,15 +29,15 @@ export class ScoringEngine {
     let totalScore = 0;
     let maxScore = 0;
     let correctCount = 0;
+    const details: Record<string, { isCorrect: boolean; pointsEarned: number }> = {};
 
     for (const q of questions) {
       const qPoints = q.points || 10;
       maxScore += qPoints;
       const ans = answers.find((a) => a.questionId === q.id);
+      let isCorrect = false;
 
       if (ans) {
-        let isCorrect = false;
-
         if (q.type === 'multiple_choice' || q.type === 'true_false') {
           isCorrect = !!q.correctOptionId && ans.selectedOptionId === q.correctOptionId;
         } else if (q.type === 'short_answer') {
@@ -52,6 +53,11 @@ export class ScoringEngine {
           correctCount++;
         }
       }
+
+      details[q.id] = {
+        isCorrect,
+        pointsEarned: isCorrect ? qPoints : 0,
+      };
     }
 
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
@@ -64,6 +70,7 @@ export class ScoringEngine {
       status,
       correctCount,
       totalQuestions: questions.length,
+      details,
     };
   }
 

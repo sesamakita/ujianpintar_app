@@ -286,6 +286,15 @@ export default function App() {
 
       const result = ScoringEngine.gradeExam(activeQuestions, studentAnsList, 75);
 
+      const fullStudentAnsList = activeQuestions.map((q, idx) => ({
+        questionId: q.id,
+        selectedOptionId: answers.selectedAnswers[idx],
+        answerText: answers.shortAnswers[idx],
+        isDoubt: !!answers.doubtAnswers[idx],
+        isCorrect: result.details?.[q.id]?.isCorrect,
+        scoreEarned: result.details?.[q.id]?.pointsEarned,
+      }));
+
       const nowTimeStr = new Date().toLocaleTimeString('id-ID', {
         hour: '2-digit',
         minute: '2-digit',
@@ -328,7 +337,7 @@ export default function App() {
 
       // 4. Try sending to Supabase / server
       examService
-        .submitGradeRecord(record, activeExam.id, sessionId)
+        .submitGradeRecord(record, activeExam.id, sessionId, fullStudentAnsList)
         .then(() => {
           setSyncStatus('synced');
           setPendingSyncData(null);
@@ -338,7 +347,7 @@ export default function App() {
         .catch((err) => {
           console.warn('Network offline on submit, stored in sync queue:', err);
           setSyncStatus('pending');
-          const pending = { record, examId: activeExam.id, sessionId };
+          const pending = { record, examId: activeExam.id, sessionId, answers: fullStudentAnsList };
           setPendingSyncData(pending);
           storage.setItem('cbt_sync_status', 'pending').catch(() => {});
           storage.setItem('cbt_pending_sync_data', pending).catch(() => {});
