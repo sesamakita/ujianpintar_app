@@ -28,8 +28,8 @@ interface TeacherStudentActionModalProps {
   visible: boolean;
   onClose: () => void;
   onSendWarning: (nisn: string, message: string) => void;
-  onResetSession: (nisn: string) => void;
-  onForceSubmit: (nisn: string) => void;
+  onResetSession: (nisn: string, studentName?: string) => void;
+  onForceSubmit: (nisn: string, studentName?: string) => void;
 }
 
 export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps> = ({
@@ -192,7 +192,7 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
         cancelText="Batal"
         onConfirm={() => {
           setIsResetModalOpen(false);
-          onResetSession(student.nisn);
+          onResetSession(student.nisn, student.name);
           onClose();
         }}
         onCancel={() => setIsResetModalOpen(false)}
@@ -208,7 +208,7 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
         cancelText="Batal"
         onConfirm={() => {
           setIsForceSubmitModalOpen(false);
-          onForceSubmit(student.nisn);
+          onForceSubmit(student.nisn, student.name);
           onClose();
         }}
         onCancel={() => setIsForceSubmitModalOpen(false)}

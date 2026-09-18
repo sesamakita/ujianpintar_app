@@ -31,9 +31,13 @@ export function useLiveProctoring(examId: string) {
       examId,
       (updatedStudent) => {
         setStudents((prev) => {
-          const exists = prev.some((s) => s.nisn === updatedStudent.nisn);
+          const isMatch = (s: StudentProctoring) =>
+            (s.id && updatedStudent.id && s.id === updatedStudent.id) ||
+            (s.nisn === updatedStudent.nisn && (s.name || '').trim().toLowerCase() === (updatedStudent.name || '').trim().toLowerCase());
+
+          const exists = prev.some(isMatch);
           if (exists) {
-            return prev.map((s) => (s.nisn === updatedStudent.nisn ? { ...s, ...updatedStudent } : s));
+            return prev.map((s) => (isMatch(s) ? { ...s, ...updatedStudent } : s));
           }
           return [updatedStudent, ...prev];
         });
@@ -91,38 +95,40 @@ export function useLiveProctoring(examId: string) {
     await examService.lockAllExamsInDb(examId);
   };
 
-  const resetStudentSession = async (nisn: string) => {
+  const resetStudentSession = async (nisn: string, studentName?: string) => {
     setStudents((prev) =>
-      prev.map((s) =>
-        s.nisn === nisn
+      prev.map((s) => {
+        const match = s.nisn === nisn && (!studentName || (s.name || '').trim().toLowerCase() === studentName.trim().toLowerCase());
+        return match
           ? {
               ...s,
               status: 'working',
               connectionStatus: 'online',
               violationCount: 0,
             }
-          : s
-      )
+          : s;
+      })
     );
 
-    const stu = students.find((s) => s.nisn === nisn);
-    await examService.resetStudentSessionInDb(examId, nisn, stu?.name);
+    const stu = students.find((s) => s.nisn === nisn && (!studentName || (s.name || '').trim().toLowerCase() === studentName.trim().toLowerCase()));
+    await examService.resetStudentSessionInDb(examId, nisn, stu?.name || studentName);
   };
 
-  const forceSubmitStudent = async (nisn: string) => {
+  const forceSubmitStudent = async (nisn: string, studentName?: string) => {
     setStudents((prev) =>
-      prev.map((s) =>
-        s.nisn === nisn
+      prev.map((s) => {
+        const match = s.nisn === nisn && (!studentName || (s.name || '').trim().toLowerCase() === studentName.trim().toLowerCase());
+        return match
           ? {
               ...s,
               remainingSeconds: 0,
               status: 'submitted',
             }
-          : s
-      )
+          : s;
+      })
     );
 
-    await examService.forceSubmitStudentInDb(examId, nisn);
+    await examService.forceSubmitStudentInDb(examId, nisn, studentName);
   };
 
   const sendWarning = async (studentNisn: string, studentName: string, message: string) => {

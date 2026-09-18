@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ActivityIndicator, Platform, Image } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -24,7 +24,7 @@ import { ScoringEngine } from './src/services/scoringEngine';
 import { examService } from './src/services/examService';
 import { storage } from './src/lib/storage';
 import type { TeacherUser } from './src/services/authService';
-import { colors, clayColors } from './src/theme';
+import { colors, clayColors, typography } from './src/theme';
 
 export default function App() {
   // Load Plus Jakarta Sans Google Fonts
@@ -462,11 +462,16 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
-        <Image
-          source={require('./assets/splash-icon.png')}
-          style={styles.splashImage}
-          resizeMode="contain"
-        />
+        <View style={styles.splashCenterBox}>
+          <Image
+            source={require('./assets/logo-up.png')}
+            style={styles.splashSystemLogo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.splashFooter}>
+          <Text style={styles.splashVersionText}>Versi 1.0.0</Text>
+        </View>
       </View>
     );
   }
@@ -592,9 +597,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  splashImage: {
-    width: 240,
-    height: 240,
+  splashCenterBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashSystemLogo: {
+    width: 80,
+    height: 40,
+  },
+  splashFooter: {
+    position: 'absolute',
+    bottom: 48,
+    alignItems: 'center',
+  },
+  splashVersionText: {
+    fontFamily: typography.semiBold,
+    fontSize: 12.5,
+    color: '#64748B',
+    letterSpacing: 0.6,
   },
   safeArea: {
     flex: 1,

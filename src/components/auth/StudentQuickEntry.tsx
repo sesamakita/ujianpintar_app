@@ -104,8 +104,8 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
       const res = await examService.getExamByToken(token.trim());
 
       if (res.exam && res.questions && res.questions.length > 0) {
-        // Gatekeeper Sesi Siswa: Periksa apakah sesi siswa terkunci (sudah submit / dikeluarkan)
-        const accessCheck = await examService.checkStudentSessionAccess(res.exam.id, nisn.trim());
+        // Gatekeeper Sesi Siswa: Periksa apakah sesi siswa terkunci (sudah submit / dikeluarkan) atau NISN dipakai siswa lain
+        const accessCheck = await examService.checkStudentSessionAccess(res.exam.id, nisn.trim(), name.trim());
         if (!accessCheck.allowed) {
           setErrorMsg(accessCheck.message || 'Akses ujian tidak diizinkan. Silakan hubungi guru pengawas.');
           return;
@@ -274,7 +274,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     focusedField === 'nisn' && styles.labelFocusedStudent,
                   ]}
                 >
-                  NISN Peserta Didik (10 Digit)
+                  NISN Peserta Didik
                 </Text>
                 <TextInput
                   style={[
@@ -285,7 +285,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                   onChangeText={(txt) => setNisn(txt.replace(/[^0-9]/g, ''))}
                   onFocus={() => setFocusedField('nisn')}
                   onBlur={() => setFocusedField(null)}
-                  placeholder="10 digit nomor NISN"
+                  placeholder="nomor NISN"
                   placeholderTextColor={colors.textSubtle}
                   keyboardType="number-pad"
                   maxLength={10}

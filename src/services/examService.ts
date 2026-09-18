@@ -206,14 +206,15 @@ export const examService = {
    * Gatekeeper: Check if a student is allowed to enter or resume an exam session
    * Blocks students who have already submitted or were expelled until the teacher resets the session
    */
-  async checkStudentSessionAccess(examId: string, studentNisn: string): Promise<{
+  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string): Promise<{
     allowed: boolean;
-    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded';
+    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded' | 'conflict';
     message?: string;
     existingSession?: any;
   }> {
     try {
       const cleanNisn = studentNisn.trim();
+      const cleanName = (studentName || '').trim().toLowerCase();
       const isValidUUID = (str?: string) =>
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
 
@@ -226,10 +227,27 @@ export const examService = {
         query = query.eq('exam_id', examId);
       }
 
-      const { data: sessions, error } = await query.order('created_at', { ascending: false }).limit(1);
+      const { data: sessions, error } = await query.order('created_at', { ascending: false });
 
       // Jika siswa sudah pernah masuk sebelumnya, periksa status sesinya
       if (!error && sessions && sessions.length > 0) {
+        // Cek apakah NISN ini sedang dipakai oleh siswa lain dengan nama berbeda
+        if (cleanName) {
+          const conflictingSession = sessions.find((s: any) => {
+            const sName = (s.student_name || '').trim().toLowerCase();
+            return sName && sName !== cleanName;
+          });
+
+          if (conflictingSession) {
+            return {
+              allowed: false,
+              reason: 'conflict',
+              message: `Nomor NIS/NISN '${cleanNisn}' sudah digunakan oleh siswa lain (${conflictingSession.student_name}). Harap periksa kembali dan masukkan NIS/NISN milik Anda sendiri.`,
+              existingSession: conflictingSession,
+            };
+          }
+        }
+
         const session = sessions[0];
 
         if (session.status === 'submitted') {
@@ -357,10 +375,22 @@ export const examService = {
         connection_status: 'online',
       };
 
-      // 1. Try to update existing row by nisn AND exam_id
+      // 1. If explicit session id provided and valid UUID, update directly
+      if (session.id && isValidUUID(session.id)) {
+        const { data: upData, error: upError } = await supabase
+          .from('student_sessions')
+          .update(payload)
+          .eq('id', session.id)
+          .select()
+          .maybeSingle();
+
+        if (!upError && upData) return { session: upData, error: null };
+      }
+
+      // 2. Otherwise search for matching session by nisn AND exam_id AND student_name
       let sessionQuery = supabase
         .from('student_sessions')
-        .select('id')
+        .select('id, student_name')
         .eq('nisn', cleanNisn);
 
       if (isValidUUID(session.examId)) {
@@ -370,24 +400,24 @@ export const examService = {
       const { data: existingRows } = await sessionQuery.order('created_at', { ascending: false });
 
       if (existingRows && existingRows.length > 0) {
-        const primaryId = existingRows[0].id;
-        const { data: upData, error: upError } = await supabase
-          .from('student_sessions')
-          .update(payload)
-          .eq('id', primaryId)
-          .select()
-          .single();
+        // Find exact match on student_name
+        const matchByName = existingRows.find(
+          (r: any) => (r.student_name || '').trim().toLowerCase() === session.studentName.trim().toLowerCase()
+        );
 
-        // Clean up duplicate rows with the same NISN and exam_id if any exist
-        if (existingRows.length > 1) {
-          const duplicateIds = existingRows.slice(1).map((r) => r.id);
-          await supabase.from('student_sessions').delete().in('id', duplicateIds);
+        if (matchByName) {
+          const { data: upData, error: upError } = await supabase
+            .from('student_sessions')
+            .update(payload)
+            .eq('id', matchByName.id)
+            .select()
+            .single();
+
+          if (!upError && upData) return { session: upData, error: null };
         }
-
-        if (!upError && upData) return { session: upData, error: null };
       }
 
-      // 2. Otherwise insert new row
+      // 3. Otherwise insert new row (DO NOT delete other sessions to prevent cascade deletion of answers)
       const { data, error } = await supabase
         .from('student_sessions')
         .insert(payload)
@@ -535,21 +565,33 @@ export const examService = {
       const validExamId = isValidUUID(examId) ? examId : null;
 
       // 1. ALWAYS FIRST update student_sessions status to 'submitted' for THIS exam
-      let sessionUpdate = supabase
-        .from('student_sessions')
-        .update({
-          status: 'submitted',
-          remaining_seconds: 0,
-          submitted_at: new Date().toISOString(),
-        })
-        .eq('nisn', cleanNisn);
+      if (sessionId && isValidUUID(sessionId)) {
+        await supabase
+          .from('student_sessions')
+          .update({
+            status: 'submitted',
+            remaining_seconds: 0,
+            submitted_at: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+      } else {
+        let sessionUpdate = supabase
+          .from('student_sessions')
+          .update({
+            status: 'submitted',
+            remaining_seconds: 0,
+            submitted_at: new Date().toISOString(),
+          })
+          .eq('nisn', cleanNisn)
+          .eq('student_name', grade.name.trim());
 
-      if (validExamId) {
-        sessionUpdate = sessionUpdate.eq('exam_id', validExamId);
+        if (validExamId) {
+          sessionUpdate = sessionUpdate.eq('exam_id', validExamId);
+        }
+        await sessionUpdate;
       }
-      await sessionUpdate;
 
-      // 2. Safe upsert into grade_records scoped to nisn AND exam_id
+      // 2. Safe upsert into grade_records scoped to session_id or (nisn AND student_name)
       const gradePayload = {
         exam_id: validExamId,
         session_id: (sessionId && isValidUUID(sessionId)) ? sessionId : null,
@@ -557,31 +599,54 @@ export const examService = {
         name: grade.name.trim(),
         nisn: cleanNisn,
         class_name: grade.className.trim(),
-        score: grade.score,
-        max_score: grade.maxScore,
-        submitted_at: grade.submittedAt,
-        time_spent_minutes: grade.timeSpentMinutes,
-        tab_violations: grade.tabViolations,
-        status: grade.status,
+        score: Math.round(Number(grade.score) || 0),
+        max_score: Math.round(Number(grade.maxScore) || 100),
+        submitted_at: grade.submittedAt || new Date().toLocaleString('id-ID'),
+        time_spent_minutes: Math.round(Number(grade.timeSpentMinutes) || 0),
+        tab_violations: Math.round(Number(grade.tabViolations) || 0),
+        status: grade.status || 'Lulus',
       };
 
-      let gradeQuery = supabase
-        .from('grade_records')
-        .select('id')
-        .eq('nisn', cleanNisn);
+      let matchedGradeId: string | null = null;
 
-      if (validExamId) {
-        gradeQuery = gradeQuery.eq('exam_id', validExamId);
+      if (sessionId && isValidUUID(sessionId)) {
+        const { data: gBySession } = await supabase
+          .from('grade_records')
+          .select('id')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+        if (gBySession?.id) {
+          matchedGradeId = gBySession.id;
+        }
       }
 
-      const { data: existingGrades } = await gradeQuery.order('created_at', { ascending: false });
+      if (!matchedGradeId) {
+        let gradeQuery = supabase
+          .from('grade_records')
+          .select('id, name')
+          .eq('nisn', cleanNisn);
 
-      if (existingGrades && existingGrades.length > 0) {
-        const primaryGradeId = existingGrades[0].id;
+        if (validExamId) {
+          gradeQuery = gradeQuery.eq('exam_id', validExamId);
+        }
+
+        const { data: existingGrades } = await gradeQuery.order('created_at', { ascending: false });
+
+        if (existingGrades && existingGrades.length > 0) {
+          const matchByName = existingGrades.find(
+            (g: any) => (g.name || '').trim().toLowerCase() === grade.name.trim().toLowerCase()
+          );
+          if (matchByName) {
+            matchedGradeId = matchByName.id;
+          }
+        }
+      }
+
+      if (matchedGradeId) {
         await supabase
           .from('grade_records')
           .update(gradePayload)
-          .eq('id', primaryGradeId);
+          .eq('id', matchedGradeId);
       } else {
         await supabase
           .from('grade_records')
@@ -601,7 +666,7 @@ export const examService = {
               answer_text: a.answerText || null,
               is_doubt: !!a.isDoubt,
               is_correct: typeof a.isCorrect === 'boolean' ? a.isCorrect : null,
-              score_earned: typeof a.scoreEarned === 'number' ? a.scoreEarned : null,
+              score_earned: typeof a.scoreEarned === 'number' ? Math.round(a.scoreEarned) : 0,
               answered_at: nowIso,
             }));
 
@@ -681,6 +746,9 @@ export const examService = {
       if (validExamId) {
         updateQuery = updateQuery.eq('exam_id', validExamId);
       }
+      if (studentName) {
+        updateQuery = updateQuery.eq('student_name', studentName.trim());
+      }
       await updateQuery;
 
       // Ensure student's real name is retrieved
@@ -733,7 +801,7 @@ export const examService = {
   /**
    * Teacher Action: Force submit single student in database
    */
-  async forceSubmitStudentInDb(examId: string, studentNisn: string) {
+  async forceSubmitStudentInDb(examId: string, studentNisn: string, studentName?: string) {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const validExamId = isValidUUID(examId) ? examId : null;
@@ -750,6 +818,9 @@ export const examService = {
 
       if (validExamId) {
         updateQuery = updateQuery.eq('exam_id', validExamId);
+      }
+      if (studentName) {
+        updateQuery = updateQuery.eq('student_name', studentName.trim());
       }
       await updateQuery;
 
