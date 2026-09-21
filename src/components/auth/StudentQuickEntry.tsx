@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { examService } from '../../services/examService';
 import { authService, TeacherUser } from '../../services/authService';
+import { formatPersonName, formatClassName } from '../../lib/formatters';
 import type { ExamSettings, Question } from '../../types/exam';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
@@ -87,7 +88,10 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleStudentSubmit = async () => {
-    if (!nisn.trim() || !name.trim() || !token.trim()) {
+    const cleanStudentName = formatPersonName(name).trim();
+    const cleanClassNameInput = formatClassName(className, false);
+
+    if (!nisn.trim() || !cleanStudentName || !token.trim()) {
       setErrorMsg('Harap lengkapi NISN, Nama Lengkap, dan 6 Digit Token PIN.');
       return;
     }
@@ -104,17 +108,18 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
       const res = await examService.getExamByToken(token.trim());
 
       if (res.exam && res.questions && res.questions.length > 0) {
-        // Gatekeeper Sesi Siswa: Periksa apakah sesi siswa terkunci (sudah submit / dikeluarkan) atau NISN dipakai siswa lain
-        const accessCheck = await examService.checkStudentSessionAccess(res.exam.id, nisn.trim(), name.trim());
+        // Gatekeeper Sesi Siswa: Periksa apakah sesi siswa terkunci, NISN konflik, batas kapasitas, atau kuota sesi bulanan guru
+        const resolvedClassName = cleanClassNameInput || formatClassName(res.exam.gradeLevel, false) || 'Kelas X';
+        const accessCheck = await examService.checkStudentSessionAccess(res.exam.id, nisn.trim(), cleanStudentName, resolvedClassName);
         if (!accessCheck.allowed) {
           setErrorMsg(accessCheck.message || 'Akses ujian tidak diizinkan. Silakan hubungi guru pengawas.');
           return;
         }
 
         onSuccess({
-          studentName: name.trim(),
+          studentName: cleanStudentName,
           nisn: nisn.trim(),
-          className: className.trim() || res.exam.gradeLevel || 'Kelas X',
+          className: resolvedClassName,
           exam: res.exam,
           questions: res.questions,
         });
@@ -131,7 +136,9 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   };
 
   const handleTeacherSubmit = async () => {
-    if (!teacherName.trim()) {
+    const cleanTeacherName = formatPersonName(teacherName).trim();
+
+    if (!cleanTeacherName) {
       setErrorMsg('Harap isi Nama Pengawas / Guru.');
       return;
     }
@@ -152,7 +159,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     try {
       const res = await authService.loginWithPIN(
         teacherTokenPin.trim(),
-        teacherName.trim()
+        cleanTeacherName
       );
 
       if (res.success && res.teacher) {
@@ -309,9 +316,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     focusedField === 'name' && styles.inputFocusedStudent,
                   ]}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(txt) => setName(formatPersonName(txt))}
                   onFocus={() => setFocusedField('name')}
-                  onBlur={() => setFocusedField(null)}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    setName(formatPersonName(name).trim());
+                  }}
                   placeholder="Nama lengkap sesuai daftar hadir"
                   placeholderTextColor={colors.textSubtle}
                   autoCorrect={false}
@@ -335,10 +345,13 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     focusedField === 'className' && styles.inputFocusedStudent,
                   ]}
                   value={className}
-                  onChangeText={setClassName}
+                  onChangeText={(txt) => setClassName(formatClassName(txt, true))}
                   onFocus={() => setFocusedField('className')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="Contoh: Kelas X - 1"
+                  onBlur={() => {
+                    setFocusedField(null);
+                    setClassName(formatClassName(className, false));
+                  }}
+                  placeholder="Contoh: XI Ips 1 atau X-1"
                   placeholderTextColor={colors.textSubtle}
                   autoCorrect={false}
                   spellCheck={false}
@@ -428,9 +441,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                       focusedField === 'teacherName' && styles.inputFocusedTeacher,
                     ]}
                     value={teacherName}
-                    onChangeText={setTeacherName}
+                    onChangeText={(txt) => setTeacherName(formatPersonName(txt))}
                     onFocus={() => setFocusedField('teacherName')}
-                    onBlur={() => setFocusedField(null)}
+                    onBlur={() => {
+                      setFocusedField(null);
+                      setTeacherName(formatPersonName(teacherName).trim());
+                    }}
                     placeholder="Nama lengkap pengawas / guru"
                     placeholderTextColor={colors.textSubtle}
                     autoCorrect={false}

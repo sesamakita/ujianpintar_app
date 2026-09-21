@@ -25,6 +25,7 @@ import {
   Layers,
 } from 'lucide-react-native';
 import { authService, TeacherUser } from '../../services/authService';
+import { formatPersonName } from '../../lib/formatters';
 import type { ExamSettings } from '../../types/exam';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
@@ -60,10 +61,12 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
       return;
     }
 
+    const cleanTeacherName = formatPersonName(teacherName).trim() || 'Bpk. Rahmat, S.Pd.';
+
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await authService.loginWithPIN(pin, teacherName, targetExamToken);
+      const res = await authService.loginWithPIN(pin, cleanTeacherName, targetExamToken);
       if (res.success && res.teacher) {
         onSuccess(res.teacher, res.matchedExam);
         onClose();
@@ -143,9 +146,12 @@ export const TeacherAuthModal: React.FC<TeacherAuthModalProps> = ({
                       nameFocused && styles.inputFocused,
                     ]}
                     value={teacherName}
-                    onChangeText={setTeacherName}
+                    onChangeText={(txt) => setTeacherName(formatPersonName(txt))}
                     onFocus={() => setNameFocused(true)}
-                    onBlur={() => setNameFocused(false)}
+                    onBlur={() => {
+                      setNameFocused(false);
+                      setTeacherName(formatPersonName(teacherName).trim());
+                    }}
                     placeholder="Nama Pengawas"
                     placeholderTextColor={colors.textSubtle}
                     autoCapitalize="words"

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { formatPersonName, formatClassName } from '../lib/formatters';
 import type { ExamSettings, Question, StudentProctoring, ViolationLogItem, GradeRecord } from '../types/exam';
 
 export const formatScheduleTime = (timeStr?: string): string => {
@@ -12,6 +13,19 @@ export const formatScheduleTime = (timeStr?: string): string => {
   }
   return clean;
 };
+
+/**
+ * Format date into Asia/Jakarta (WIB) YYYY-MM-DD
+ */
+export function getWibDateString(dateInput: string | Date = new Date()): string {
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return new Date().toISOString().substring(0, 10);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  } catch {
+    return (typeof dateInput === 'string' ? dateInput : dateInput.toISOString()).substring(0, 10);
+  }
+}
 
 /**
  * Helper to reliably dispatch Supabase Realtime broadcasts by ensuring channel subscription
@@ -206,7 +220,7 @@ export const examService = {
    * Gatekeeper: Check if a student is allowed to enter or resume an exam session
    * Blocks students who have already submitted or were expelled until the teacher resets the session
    */
-  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string): Promise<{
+  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string, className?: string): Promise<{
     allowed: boolean;
     reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded' | 'conflict';
     message?: string;
@@ -313,8 +327,9 @@ export const examService = {
               }
             }
 
-            // Jika akun guru adalah Free (Basic), batasi maksimal 40 siswa per ujian
+            // Jika akun guru adalah Free (Basic):
             if (!isUnlimited) {
+              // 1. Batasi maksimal 40 siswa per ujian/kelas
               const { count, error: countErr } = await supabase
                 .from('student_sessions')
                 .select('id', { count: 'exact', head: true })
@@ -326,6 +341,86 @@ export const examService = {
                   reason: 'capacity_exceeded',
                   message: 'Kapasitas Ujian Penuh: Sesi ujian ini telah mencapai batas maksimal 40 siswa (Paket Guru Basic). Silakan hubungi guru pengawas Anda untuk meng-upgrade ke akun Guru PRO agar kapasitas peserta menjadi tanpa batas (Unlimited).',
                 };
+              }
+
+              // 2. Batasi kuota maksimal 3 sesi ujian per bulan (>10 siswa per sesi)
+              try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const startOfMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 12 * 3600 * 1000).toISOString();
+                const endOfMonth = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999) + 14 * 3600 * 1000).toISOString();
+
+                // Dapatkan semua ujian milik guru ini
+                const { data: teacherExams } = await supabase
+                  .from('exams')
+                  .select('id')
+                  .eq('teacher_id', examData.teacher_id);
+
+                if (teacherExams && teacherExams.length > 0) {
+                  const examIds = teacherExams.map((e) => e.id);
+                  const { data: rawSessions } = await supabase
+                    .from('student_sessions')
+                    .select('id, exam_id, class_name, nisn, student_name, created_at, started_at')
+                    .in('exam_id', examIds)
+                    .gte('created_at', startOfMonth)
+                    .lte('created_at', endOfMonth);
+
+                  if (rawSessions && rawSessions.length > 0) {
+                    const currentMonthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+                    const groupsMap = new Map<string, Set<string>>();
+
+                    for (const row of rawSessions) {
+                      const exId = row.exam_id;
+                      const normCls = (row.class_name || 'Kelas X').trim().toUpperCase();
+                      const dateStr = getWibDateString(row.started_at || row.created_at);
+
+                      if (!dateStr.startsWith(currentMonthPrefix)) continue;
+
+                      const grpKey = `${exId}_${normCls}_${dateStr}`;
+                      const cNisn = (row.nisn || row.student_name || row.id).trim().toLowerCase();
+
+                      if (!groupsMap.has(grpKey)) {
+                        groupsMap.set(grpKey, new Set<string>());
+                      }
+                      if (cNisn) {
+                        groupsMap.get(grpKey)!.add(cNisn);
+                      }
+                    }
+
+                    // Evaluasi sesi yang > 10 siswa
+                    const qualifyingKeys: string[] = [];
+                    let usedSessions = 0;
+                    for (const [k, nisns] of groupsMap.entries()) {
+                      if (nisns.size > 10) {
+                        usedSessions++;
+                        qualifyingKeys.push(k);
+                      }
+                    }
+
+                    const todayStr = getWibDateString();
+                    const normCurrentClass = (className || 'Kelas X').trim().toUpperCase();
+                    const currentGroupKey = `${examId}_${normCurrentClass}_${todayStr}`;
+                    const isAlreadyQualifying = qualifyingKeys.includes(currentGroupKey);
+
+                    // Jika guru sudah mencapai 3 sesi dan sesi ini belum masuk 3 sesi tersebut:
+                    if (!isAlreadyQualifying && usedSessions >= 3) {
+                      const currentSet = groupsMap.get(currentGroupKey);
+                      const currentCount = currentSet ? currentSet.size : 0;
+
+                      // Sesi baru dibatasi maksimal 10 siswa (mode simulasi/remedial)
+                      if (currentCount >= 10) {
+                        return {
+                          allowed: false,
+                          reason: 'capacity_exceeded',
+                          message: 'Batas Kuota Guru Tercapai: Akun guru Anda telah menggunakan batas maksimal 3 sesi ujian (>10 siswa) untuk bulan ini pada paket Guru Basic. Sesi baru dibatasi maksimal 10 siswa untuk mode simulasi/remedial. Silakan hubungi guru pengawas Anda untuk meningkatkan akun ke Guru PRO.',
+                        };
+                      }
+                    }
+                  }
+                }
+              } catch (quotaErr) {
+                console.warn('Mobile quota session evaluation exception:', quotaErr);
               }
             }
           }
@@ -365,8 +460,8 @@ export const examService = {
       const payload = {
         exam_id: isValidUUID(session.examId) ? session.examId : null,
         nisn: cleanNisn,
-        student_name: session.studentName.trim(),
-        class_name: session.className.trim(),
+        student_name: formatPersonName(session.studentName).trim(),
+        class_name: formatClassName(session.className, false).trim() || 'Kelas X',
         status: session.status,
         remaining_seconds: session.remainingSeconds,
         total_questions: session.totalQuestions,
@@ -505,7 +600,7 @@ export const examService = {
       await supabase.from('violation_logs').insert({
         exam_id: isValidUUID(violation.examId) ? violation.examId : null,
         session_id: (violation.sessionId && isValidUUID(violation.sessionId)) ? violation.sessionId : null,
-        student_name: violation.studentName.trim(),
+        student_name: formatPersonName(violation.studentName).trim(),
         student_nisn: violation.studentNisn.trim(),
         timestamp: nowStr,
         message: violation.message,
@@ -522,24 +617,23 @@ export const examService = {
         sessionQuery = sessionQuery.eq('exam_id', violation.examId);
       }
 
-      const { data: session } = await sessionQuery
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data: sessionRows } = await sessionQuery.order('created_at', { ascending: false }).limit(1);
 
-      if (session) {
-        const newCount = (session.violation_count || 0) + 1;
+      if (sessionRows && sessionRows.length > 0) {
+        const currentCount = Number(sessionRows[0].violation_count) || 0;
         await supabase
           .from('student_sessions')
           .update({
-            violation_count: newCount,
-            // Pelanggaran dicatat untuk audit trail guru, sesi tetap 'working' (submit paksa manual oleh guru)
-            status: 'working',
+            violation_count: currentCount + 1,
+            status: violation.severity === 'danger' ? 'violation_flagged' : 'working',
           })
-          .eq('id', session.id);
+          .eq('id', sessionRows[0].id);
       }
-    } catch (err) {
-      console.warn('Violation log insert warning:', err);
+
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Failed to record violation in DB:', err.message);
+      return { success: false, error: err.message };
     }
   },
 
@@ -583,7 +677,7 @@ export const examService = {
             submitted_at: new Date().toISOString(),
           })
           .eq('nisn', cleanNisn)
-          .eq('student_name', grade.name.trim());
+          .eq('student_name', formatPersonName(grade.name).trim());
 
         if (validExamId) {
           sessionUpdate = sessionUpdate.eq('exam_id', validExamId);
@@ -596,9 +690,9 @@ export const examService = {
         exam_id: validExamId,
         session_id: (sessionId && isValidUUID(sessionId)) ? sessionId : null,
         student_id: grade.studentId || `stu-${cleanNisn}`,
-        name: grade.name.trim(),
+        name: formatPersonName(grade.name).trim(),
         nisn: cleanNisn,
-        class_name: grade.className.trim(),
+        class_name: formatClassName(grade.className, false).trim() || 'Kelas X',
         score: Math.round(Number(grade.score) || 0),
         max_score: Math.round(Number(grade.maxScore) || 100),
         submitted_at: grade.submittedAt || new Date().toLocaleString('id-ID'),
