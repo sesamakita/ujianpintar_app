@@ -20,11 +20,13 @@ import {
   Shield,
   GraduationCap,
   User,
+  Award,
 } from 'lucide-react-native';
 import { examService } from '../../services/examService';
 import { authService, TeacherUser } from '../../services/authService';
 import { formatPersonName, formatClassName } from '../../lib/formatters';
-import type { ExamSettings, Question } from '../../types/exam';
+import type { ExamSettings, Question, StudentPublicExamSummary } from '../../types/exam';
+import { StudentResultModal } from '../student/StudentResultModal';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface StudentQuickEntryProps {
@@ -48,11 +50,34 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  // Tab State: 'student' or 'teacher'
+  const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
+
+  // Input Focus State: tracks which field is currently active
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const FIELD_OFFSETS: Record<string, number> = {
+    nisn: 40,
+    name: 110,
+    className: 180,
+    token: 250,
+    teacherName: 80,
+    teacherTokenPin: 150,
+    checkNisn: 480,
+    checkToken: 550,
+  };
+
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
-        setKeyboardHeight(e.endCoordinates?.height || 280);
+        const height = e.endCoordinates?.height || 280;
+        setKeyboardHeight(height);
+        if (focusedField && typeof FIELD_OFFSETS[focusedField] === 'number') {
+          setTimeout(() => {
+            scrollViewRef.current?.scrollTo({ y: FIELD_OFFSETS[focusedField], animated: true });
+          }, 80);
+        }
       }
     );
     const hideSub = Keyboard.addListener(
@@ -65,13 +90,17 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [focusedField]);
 
-  // Tab State: 'student' or 'teacher'
-  const [activeTab, setActiveTab] = useState<'student' | 'teacher'>('student');
-
-  // Input Focus State: tracks which field is currently active
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const handleFocusField = (field: string) => {
+    setFocusedField(field);
+    const targetY = FIELD_OFFSETS[field];
+    if (typeof targetY === 'number') {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+      }, 100);
+    }
+  };
 
   // Student Form State
   const [nisn, setNisn] = useState('');
@@ -86,6 +115,45 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   // Common State
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Check Result State (Dedicated Container)
+  const [checkNisn, setCheckNisn] = useState('');
+  const [checkToken, setCheckToken] = useState('');
+  const [isCheckingResult, setIsCheckingResult] = useState(false);
+  const [checkErrorMsg, setCheckErrorMsg] = useState<string | null>(null);
+  const [publicResultModalOpen, setPublicResultModalOpen] = useState(false);
+  const [publicResultData, setPublicResultData] = useState<StudentPublicExamSummary | null>(null);
+
+  const handleCheckResult = async () => {
+    if (!checkNisn.trim()) {
+      setCheckErrorMsg('Harap masukkan nomor NISN Anda.');
+      return;
+    }
+
+    setIsCheckingResult(true);
+    setCheckErrorMsg(null);
+
+    try {
+      const results = await examService.lookupStudentExamHistory(
+        checkNisn.trim(),
+        checkToken.trim() || undefined
+      );
+
+      if (results && results.length > 0) {
+        setPublicResultData(results[0]);
+        setPublicResultModalOpen(true);
+      } else {
+        const msg = checkToken.trim()
+          ? `Data ujian untuk NISN '${checkNisn.trim()}' dengan Token PIN '${checkToken.trim()}' tidak ditemukan. Pastikan nomor NISN dan Token PIN modul soal ujian sudah sesuai.`
+          : `Data ujian untuk NISN '${checkNisn.trim()}' tidak ditemukan. Periksa kembali nomor NISN Anda.`;
+        setCheckErrorMsg(msg);
+      }
+    } catch {
+      setCheckErrorMsg('Gagal memeriksa nilai. Pastikan koneksi internet aktif.');
+    } finally {
+      setIsCheckingResult(false);
+    }
+  };
 
   const handleStudentSubmit = async () => {
     const cleanStudentName = formatPersonName(name).trim();
@@ -180,7 +248,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     <KeyboardAvoidingView
       style={styles.keyboardRoot}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
     >
       <ScrollView
         ref={scrollViewRef}
@@ -188,12 +256,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
           styles.container,
           {
             paddingTop: topPadding,
-            paddingBottom: Math.max(40, keyboardHeight + 36),
+            paddingBottom: keyboardHeight > 0 ? keyboardHeight + 36 : (Platform.OS === 'ios' ? 36 : 48),
           },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets={true}
+        keyboardDismissMode="interactive"
         bounces={false}
       >
         {/* Entry Form Card */}
@@ -290,7 +358,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                   ]}
                   value={nisn}
                   onChangeText={(txt) => setNisn(txt.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setFocusedField('nisn')}
+                  onFocus={() => handleFocusField('nisn')}
                   onBlur={() => setFocusedField(null)}
                   placeholder="nomor NISN"
                   placeholderTextColor={colors.textSubtle}
@@ -317,7 +385,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                   ]}
                   value={name}
                   onChangeText={(txt) => setName(formatPersonName(txt))}
-                  onFocus={() => setFocusedField('name')}
+                  onFocus={() => handleFocusField('name')}
                   onBlur={() => {
                     setFocusedField(null);
                     setName(formatPersonName(name).trim());
@@ -346,7 +414,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                   ]}
                   value={className}
                   onChangeText={(txt) => setClassName(formatClassName(txt, true))}
-                  onFocus={() => setFocusedField('className')}
+                  onFocus={() => handleFocusField('className')}
                   onBlur={() => {
                     setFocusedField(null);
                     setClassName(formatClassName(className, false));
@@ -382,12 +450,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     ]}
                     value={token}
                     onChangeText={(txt) => setToken(txt.replace(/[^0-9]/g, ''))}
-                    onFocus={() => {
-                      setFocusedField('token');
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 120);
-                    }}
+                    onFocus={() => handleFocusField('token')}
                     onBlur={() => setFocusedField(null)}
                     placeholder="PIN 6 DIGIT"
                     placeholderTextColor="#A7F3D0"
@@ -442,7 +505,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     ]}
                     value={teacherName}
                     onChangeText={(txt) => setTeacherName(formatPersonName(txt))}
-                    onFocus={() => setFocusedField('teacherName')}
+                    onFocus={() => handleFocusField('teacherName')}
                     onBlur={() => {
                       setFocusedField(null);
                       setTeacherName(formatPersonName(teacherName).trim());
@@ -479,12 +542,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     ]}
                     value={teacherTokenPin}
                     onChangeText={(txt) => setTeacherTokenPin(txt.replace(/[^0-9]/g, ''))}
-                    onFocus={() => {
-                      setFocusedField('teacherTokenPin');
-                      setTimeout(() => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                      }, 120);
-                    }}
+                    onFocus={() => handleFocusField('teacherTokenPin')}
                     onBlur={() => setFocusedField(null)}
                     placeholder="PIN 6 DIGIT"
                     placeholderTextColor="#93C5FD"
@@ -515,7 +573,100 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
             </>
           )}
         </View>
+
+        {/* KONTAINER TERPISAH: CEK HASIL NILAI UJIAN SISWA (WARNA KHUSUS INDIGO CLAY) */}
+        {activeTab === 'student' && (
+          <View style={styles.checkResultCard}>
+            {/* Header Kontainer */}
+            <View style={styles.checkResultHeader}>
+              <View style={styles.checkResultIconCircle}>
+                <Award size={22} color="#4338CA" strokeWidth={2.4} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.checkResultTitleRow}>
+                  <Text style={styles.checkResultTitle}>Cek Hasil Nilai Ujian</Text>
+                  <View style={styles.checkResultTag}>
+                    <Text style={styles.checkResultTagText}>Mandiri</Text>
+                  </View>
+                </View>
+                <Text style={styles.checkResultSubtitle}>
+                  Periksa riwayat skor ujian, rincian jawaban benar/salah, serta unduh SKHU / Rapor PDF.
+                </Text>
+              </View>
+            </View>
+
+            {checkErrorMsg && (
+              <View style={styles.checkErrorBanner}>
+                <AlertCircle size={14} color="#DC2626" strokeWidth={2.2} />
+                <Text style={styles.checkErrorText}>{checkErrorMsg}</Text>
+              </View>
+            )}
+
+            {/* Kolom 1: NISN Peserta Didik */}
+            <View style={styles.inputGroupCompact}>
+              <Text style={styles.labelCompact}>NISN Peserta Didik</Text>
+              <TextInput
+                style={[
+                  styles.inputCompact,
+                  focusedField === 'checkNisn' && styles.inputCompactFocused,
+                ]}
+                value={checkNisn}
+                onChangeText={(txt) => setCheckNisn(txt.replace(/[^0-9]/g, ''))}
+                onFocus={() => handleFocusField('checkNisn')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Masukkan 10 digit nomor NISN..."
+                placeholderTextColor={colors.textSubtle}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+            </View>
+
+            {/* Kolom 2: Token Ujian */}
+            <View style={styles.inputGroupCompact}>
+              <Text style={styles.labelCompact}>Token PIN Ujian (Opsional)</Text>
+              <TextInput
+                style={[
+                  styles.inputCompact,
+                  focusedField === 'checkToken' && styles.inputCompactFocused,
+                ]}
+                value={checkToken}
+                onChangeText={(txt) => setCheckToken(txt.toUpperCase())}
+                onFocus={() => handleFocusField('checkToken')}
+                onBlur={() => setFocusedField(null)}
+                placeholder="Contoh: 900286"
+                placeholderTextColor={colors.textSubtle}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </View>
+
+            {/* Tombol Periksa Nilai */}
+            <TouchableOpacity
+              style={styles.checkSubmitBtn}
+              onPress={handleCheckResult}
+              disabled={isCheckingResult}
+              activeOpacity={0.85}
+            >
+              {isCheckingResult ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <View style={styles.btnContent}>
+                  <Award size={16} color="#ffffff" strokeWidth={2.4} />
+                  <Text style={styles.checkSubmitBtnText}>Periksa Nilai Ujian</Text>
+                  <ArrowRight size={16} color="#ffffff" strokeWidth={2.4} />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
+
+      {/* Modal Hasil Ujian Siswa Mandiri */}
+      <StudentResultModal
+        visible={publicResultModalOpen}
+        onClose={() => setPublicResultModalOpen(false)}
+        result={publicResultData}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -797,5 +948,127 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     letterSpacing: 0.1,
     includeFontPadding: false,
+  },
+  checkResultCard: {
+    backgroundColor: '#EEF2FF', // Pastel Indigo Clay
+    borderRadius: clayRadii.modal,
+    padding: 22,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 2.5,
+    borderColor: '#E0E7FF',
+    borderBottomWidth: 6,
+    borderBottomColor: '#C7D2FE',
+    marginTop: 18,
+    marginBottom: 28,
+    ...clayShadows.cardHover,
+  },
+  checkResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  checkResultIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#E0E7FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#C7D2FE',
+  },
+  checkResultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkResultTitle: {
+    fontFamily: typography.extraBold,
+    fontSize: 16,
+    color: '#312E81',
+    letterSpacing: -0.2,
+  },
+  checkResultTag: {
+    backgroundColor: '#C7D2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  checkResultTagText: {
+    fontFamily: typography.bold,
+    fontSize: 10,
+    color: '#3730A3',
+    textTransform: 'uppercase',
+  },
+  checkResultSubtitle: {
+    fontFamily: typography.medium,
+    fontSize: 11.5,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  checkErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginBottom: 12,
+  },
+  checkErrorText: {
+    fontFamily: typography.medium,
+    fontSize: 11,
+    color: '#DC2626',
+    flex: 1,
+  },
+  inputGroupCompact: {
+    marginBottom: 12,
+  },
+  labelCompact: {
+    fontFamily: typography.bold,
+    fontSize: 11.5,
+    color: '#334155',
+    marginBottom: 5,
+  },
+  inputCompact: {
+    height: 46,
+    backgroundColor: '#ffffff',
+    borderRadius: clayRadii.input,
+    paddingHorizontal: 14,
+    fontFamily: typography.semiBold,
+    fontSize: 13.5,
+    color: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#94A3B8',
+  },
+  inputCompactFocused: {
+    borderColor: '#4F46E5',
+    borderBottomColor: '#3730A3',
+  },
+  checkSubmitBtn: {
+    height: 48,
+    backgroundColor: '#4F46E5',
+    borderRadius: clayRadii.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderBottomWidth: 4.5,
+    borderBottomColor: '#3730A3',
+    ...clayShadows.btnTeacher,
+  },
+  checkSubmitBtnText: {
+    fontFamily: typography.bold,
+    color: '#ffffff',
+    fontSize: 13.5,
+    letterSpacing: 0.1,
   },
 });

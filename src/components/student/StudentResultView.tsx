@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ShieldCheck, Award, Home, Lock, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react-native';
-import type { GradeRecord } from '../../types/exam';
+import type { GradeRecord, ExamSettings, Question, StudentAnswerState } from '../../types/exam';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface StudentResultViewProps {
@@ -11,6 +11,10 @@ interface StudentResultViewProps {
   syncStatus?: 'synced' | 'pending' | 'syncing';
   onRetrySync?: () => Promise<void>;
   onResetToHome: () => void;
+  exam?: ExamSettings;
+  sessionId?: string;
+  questions?: Question[];
+  answers?: StudentAnswerState[];
 }
 
 export const StudentResultView: React.FC<StudentResultViewProps> = ({
@@ -19,10 +23,45 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   syncStatus = 'synced',
   onRetrySync,
   onResetToHome,
+  exam,
+  sessionId,
+  questions,
+  answers,
 }) => {
   const insets = useSafeAreaInsets();
   const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 14;
+  const hasEssay = (questions || []).some((q) => q.type === 'essay');
+  const isPendingReview = gradeRecord.status === 'Menunggu Koreksi' || (hasEssay && gradeRecord.status !== 'Lulus');
   const isPassed = gradeRecord.status === 'Lulus';
+
+  // Compute breakdown points
+  let objScore = 0;
+  let objMax = 0;
+  let shortScore = 0;
+  let shortMax = 0;
+  let essayMax = 0;
+
+  (questions || []).forEach((q) => {
+    const qPoints = q.points || 10;
+    const ans = (answers || []).find((a) => a.questionId === q.id);
+    if (q.type === 'multiple_choice' || q.type === 'true_false') {
+      objMax += qPoints;
+      if (ans && !!q.correctOptionId && ans.selectedOptionId === q.correctOptionId) {
+        objScore += qPoints;
+      }
+    } else if (q.type === 'short_answer') {
+      shortMax += qPoints;
+      if (ans && q.correctAnswerText && ans.answerText) {
+        const cleanC = q.correctAnswerText.trim().toLowerCase().replace(/,/g, '.');
+        const cleanU = ans.answerText.trim().toLowerCase().replace(/,/g, '.');
+        if (cleanC === cleanU) {
+          shortScore += qPoints;
+        }
+      }
+    } else if (q.type === 'essay') {
+      essayMax += qPoints;
+    }
+  });
 
   return (
     <ScrollView
@@ -37,7 +76,9 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
 
       <Text style={styles.title}>Ujian Berhasil Dikumpulkan</Text>
       <Text style={styles.subtitle}>
-        Lembar jawaban telah terkoreksi otomatis dan tersimpan aman di basis data pengawas.
+        {hasEssay
+          ? 'Jawaban objektif telah terkoreksi otomatis. Jawaban uraian akan dikoreksi oleh guru pengampu.'
+          : 'Lembar jawaban telah terkoreksi otomatis dan tersimpan aman di basis data pengawas.'}
       </Text>
 
       {/* Sync Status Banner */}
@@ -76,7 +117,9 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
           <View style={styles.headerIconPod}>
             <Award size={18} color="#2563EB" strokeWidth={2.4} />
           </View>
-          <Text style={styles.cardHeaderTitle}>Hasil Evaluasi CBT</Text>
+          <Text style={styles.cardHeaderTitle}>
+            {hasEssay ? 'Hasil Evaluasi CBT (Nilai Sementara)' : 'Hasil Evaluasi CBT'}
+          </Text>
         </View>
 
         <View style={styles.scoreRow}>
@@ -85,9 +128,31 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
         </View>
 
         {/* Status Pill */}
-        <View style={[styles.statusPill, isPassed ? styles.statusPassed : styles.statusRemedial]}>
-          <Text style={[styles.statusPillText, isPassed ? styles.textPassed : styles.textRemedial]}>
-            {isPassed ? 'LULUS KKM (75)' : 'REMEDIAL'}
+        <View
+          style={[
+            styles.statusPill,
+            isPassed
+              ? styles.statusPassed
+              : isPendingReview
+              ? styles.statusPending
+              : styles.statusRemedial,
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusPillText,
+              isPassed
+                ? styles.textPassed
+                : isPendingReview
+                ? styles.textPending
+                : styles.textRemedial,
+            ]}
+          >
+            {isPassed
+              ? 'LULUS KKM (75)'
+              : isPendingReview
+              ? '⏳ MENUNGGU KOREKSI URAIAN'
+              : 'REMEDIAL'}
           </Text>
         </View>
 
@@ -253,6 +318,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
     borderBottomColor: '#A7F3D0',
   },
+  statusPending: {
+    backgroundColor: '#FEF3C7',
+    borderBottomColor: '#FDE68A',
+  },
   statusRemedial: {
     backgroundColor: '#FFF1F2',
     borderBottomColor: '#FECDD3',
@@ -264,6 +333,9 @@ const styles = StyleSheet.create({
   },
   textPassed: {
     color: '#065F46',
+  },
+  textPending: {
+    color: '#92400E',
   },
   textRemedial: {
     color: '#9F1239',

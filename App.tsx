@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, StatusBar, ActivityIndicator, Platform, Image } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -25,6 +25,76 @@ import { examService } from './src/services/examService';
 import { storage } from './src/lib/storage';
 import type { TeacherUser } from './src/services/authService';
 import { colors, clayColors, typography } from './src/theme';
+import { checkAppUpdate, CURRENT_APP_VERSION } from './src/services/updateService';
+import type { AppUpdateInfo } from './src/services/updateService';
+import { UpdateAppModal } from './src/components/common/UpdateAppModal';
+import { CustomModal } from './src/components/common/CustomModal';
+
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+/**
+ * Gate that blocks the Lobby ("SESI UJIAN SIAP") when the teacher has already
+ * force-submitted / locked the exam for this student. Without it, a student who
+ * returns to the Lobby keeps sitting there unaware that the exam is closed.
+ */
+const JoinSessionGate: React.FC<{
+  exam: ExamSettings;
+  nisn: string;
+  studentName: string;
+  className: string;
+  onAlreadySubmitted?: (grade?: GradeRecord) => void;
+  children: React.ReactNode;
+}> = ({ exam, nisn, studentName, className, onAlreadySubmitted, children }) => {
+  const [isChecking, setIsChecking] = useState(true);
+  const [blocked, setBlocked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let done = false;
+    const check = async () => {
+      try {
+        const access = await examService.checkStudentSessionAccess(exam.id, nisn, studentName, className);
+        if (cancelled) return;
+        setBlocked(!access.allowed && access.reason === 'submitted');
+        if (!access.allowed && access.reason === 'submitted') {
+          if (onAlreadySubmitted && !done) {
+            done = true;
+            onAlreadySubmitted();
+          }
+          return;
+        }
+        setIsChecking(false);
+      } catch {
+        if (!cancelled) setIsChecking(false);
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, [exam.id, nisn, studentName, className]);
+
+  if (isChecking) {
+    return (
+      <View style={styles.centerBox}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={styles.centerBoxText}>Memeriksa status sesi...</Text>
+      </View>
+    );
+  }
+
+  if (blocked) return null;
+  return <>{children}</>;
+};
 
 export default function App() {
   // Load Plus Jakarta Sans Google Fonts
@@ -59,7 +129,7 @@ export default function App() {
     nisn: '0082391024',
     className: 'Kelas X - 1',
   });
-  const [sessionId, setSessionId] = useState<string>(`ses-${Date.now()}`);
+  const [sessionId, setSessionId] = useState<string>(() => generateUUID());
 
   // Teacher Tab Flow
   const [teacherTab, setTeacherTab] = useState<'proctoring' | 'grades'>('proctoring');
@@ -92,6 +162,68 @@ export default function App() {
     sessionId: string;
   } | null>(null);
 
+  // In-App Update Checker State
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [isUpdateModalVisible, setIsUpdateModalVisible] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState<{
+    visible: boolean;
+    type: 'success' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
+  const handleCheckUpdate = async (isManual = false) => {
+    if (isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    try {
+      const result = await checkAppUpdate();
+      if (result.updateInfo && result.updateInfo.hasUpdate) {
+        setUpdateInfo(result.updateInfo);
+        setIsUpdateModalVisible(true);
+      } else if (isManual) {
+        if (result.error) {
+          setFeedbackModal({
+            visible: true,
+            type: 'warning',
+            title: 'Koneksi Terkendala',
+            message: 'Tidak dapat memeriksa pembaruan saat ini. Pastikan HP terhubung ke internet.',
+          });
+        } else {
+          setFeedbackModal({
+            visible: true,
+            type: 'success',
+            title: 'Aplikasi Terkini',
+            message: `Aplikasi Anda sudah dalam versi terbaru (v${CURRENT_APP_VERSION.version} Build ${CURRENT_APP_VERSION.versionCode}). Belum ada pembaruan baru.`,
+          });
+        }
+      }
+    } catch (_err) {
+      if (isManual) {
+        setFeedbackModal({
+          visible: true,
+          type: 'warning',
+          title: 'Gagal Memeriksa',
+          message: 'Terjadi kesalahan saat memeriksa pembaruan aplikasi.',
+        });
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  // Auto-check for updates on startup when splash finishes
+  useEffect(() => {
+    if (!isSplashVisible && studentStep === 0) {
+      handleCheckUpdate(false);
+    }
+  }, [isSplashVisible]);
+
   // Fetch or Restore Session from Local Cache on Mount (Crash/Reboot Recovery)
   useEffect(() => {
     const checkAndRestoreSession = async () => {
@@ -104,6 +236,11 @@ export default function App() {
         const cachedSeal = await storage.getItem<string>('cbt_integrity_seal');
         const cachedSync = await storage.getItem<'synced' | 'pending'>('cbt_sync_status');
         const cachedPending = await storage.getItem<{ record: GradeRecord; examId: string; sessionId: string }>('cbt_pending_sync_data');
+        const cachedSessionId = await storage.getItem<string>('cbt_active_session_id');
+
+        if (cachedSessionId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cachedSessionId)) {
+          setSessionId(cachedSessionId);
+        }
 
         if (cachedExam && cachedQuestions && cachedStudent && cachedStep) {
           // If cachedStep is 3 (in exam sheet), verify with database whether session is still allowed
@@ -226,20 +363,52 @@ export default function App() {
       nisn: data.nisn,
       className: data.className,
     };
+    const freshSessionId = generateUUID();
+    setSessionId(freshSessionId);
     setStudentInfo(studentData);
     setActiveExam(data.exam);
     setActiveQuestions(data.questions);
     setStudentStep(2); // Go to Lobby
 
     // Pre-cache entire bundle to local disk immediately
+    storage.setItem('cbt_active_session_id', freshSessionId).catch(() => {});
     storage.setItem('cbt_active_exam', data.exam).catch(() => {});
     storage.setItem('cbt_active_questions', data.questions).catch(() => {});
     storage.setItem('cbt_student_info', studentData).catch(() => {});
     storage.setItem('cbt_student_step', 2).catch(() => {});
+    storage.removeItem('cbt_final_grade').catch(() => {});
+    storage.removeItem('cbt_integrity_seal').catch(() => {});
+    storage.removeItem('cbt_sync_status').catch(() => {});
+    storage.removeItem('cbt_pending_sync_data').catch(() => {});
+    const cleanEntryNisn = (data.nisn || '').trim();
+    if (data.exam?.id && cleanEntryNisn) {
+      storage.removeItem(`cbt_exam_end_time_${data.exam.id}_${cleanEntryNisn}`).catch(() => {});
+      storage.removeItem(`ans_sel_${data.exam.id}_${cleanEntryNisn}`).catch(() => {});
+      storage.removeItem(`ans_short_${data.exam.id}_${cleanEntryNisn}`).catch(() => {});
+      storage.removeItem(`ans_doubt_${data.exam.id}_${cleanEntryNisn}`).catch(() => {});
+    }
+    setFinalGrade(null);
+    setIntegritySeal('');
   };
 
   // Start Exam
   const handleStartExam = async () => {
+    let currentSessionId = sessionId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentSessionId)) {
+      currentSessionId = generateUUID();
+      setSessionId(currentSessionId);
+    }
+    storage.setItem('cbt_active_session_id', currentSessionId).catch(() => {});
+
+    // Clear submission locks so fresh or reset attempts can submit normally
+    const cleanNisn = (studentInfo.nisn || '').trim();
+    if (activeExam?.id && cleanNisn) {
+      submittedSessionsRef.current.delete(`${activeExam.id}_${cleanNisn}`);
+      const targetEnd = Date.now() + (activeExam.durationMinutes || 60) * 60 * 1000;
+      storage.setItem(`cbt_exam_end_time_${activeExam.id}_${cleanNisn}`, targetEnd).catch(() => {});
+    }
+    isSubmissionInFlightRef.current = false;
+
     // 1. Instantly transition to exam sheet
     setStudentStep(3);
     storage.setItem('cbt_student_step', 3).catch(() => {});
@@ -247,6 +416,7 @@ export default function App() {
     // 2. Register session in Supabase in background
     try {
       const res = await examService.upsertStudentSession({
+        id: currentSessionId,
         examId: activeExam.id,
         nisn: studentInfo.nisn,
         studentName: studentInfo.name,
@@ -260,14 +430,17 @@ export default function App() {
 
       if (res && res.session && res.session.id) {
         setSessionId(res.session.id);
-      } else {
-        setSessionId(`ses-${Date.now()}`);
+        storage.setItem('cbt_active_session_id', res.session.id).catch(() => {});
       }
     } catch (err) {
       console.warn('Session upsert warning:', err);
-      setSessionId(`ses-${Date.now()}`);
     }
   };
+
+  // Idempotency guard: prevent double submission (realtime broadcast + polling +
+  // postgres UPDATE can all fire force-submit at nearly the same time).
+  const submittedSessionsRef = useRef<Set<string>>(new Set());
+  const isSubmissionInFlightRef = useRef(false);
 
   // Submit Exam (Resilient Offline-First Submission)
   const handleSubmitExam = async (answers: {
@@ -276,6 +449,15 @@ export default function App() {
     doubtAnswers: Record<number, boolean>;
     violationCount: number;
   }) => {
+    // Guard: only one in-flight submission at a time + never twice per session
+    const cleanNisn = (studentInfo.nisn || '').trim();
+    const sessionKey = `${activeExam.id}_${cleanNisn}`;
+    if (isSubmissionInFlightRef.current) return;
+    if (submittedSessionsRef.current.has(sessionKey)) {
+      setStudentStep(4);
+      return;
+    }
+    isSubmissionInFlightRef.current = true;
     try {
       // 1. Instant Synchronous Local Auto-Grading (0 ms)
       const studentAnsList = activeQuestions.map((q, idx) => ({
@@ -286,14 +468,17 @@ export default function App() {
 
       const result = ScoringEngine.gradeExam(activeQuestions, studentAnsList, 75);
 
-      const fullStudentAnsList = activeQuestions.map((q, idx) => ({
-        questionId: q.id,
-        selectedOptionId: answers.selectedAnswers[idx],
-        answerText: answers.shortAnswers[idx],
-        isDoubt: !!answers.doubtAnswers[idx],
-        isCorrect: result.details?.[q.id]?.isCorrect,
-        scoreEarned: result.details?.[q.id]?.pointsEarned,
-      }));
+      const fullStudentAnsList = activeQuestions.map((q, idx) => {
+        const isEssay = q.type === 'essay';
+        return {
+          questionId: q.id,
+          selectedOptionId: answers.selectedAnswers[idx],
+          answerText: answers.shortAnswers[idx],
+          isDoubt: !!answers.doubtAnswers[idx],
+          isCorrect: isEssay ? null : (result.details?.[q.id]?.isCorrect ?? null),
+          scoreEarned: isEssay ? null : (result.details?.[q.id]?.pointsEarned ?? null),
+        };
+      });
 
       const nowTimeStr = new Date().toLocaleTimeString('id-ID', {
         hour: '2-digit',
@@ -353,8 +538,17 @@ export default function App() {
           storage.setItem('cbt_pending_sync_data', pending).catch(() => {});
         });
 
-      // 5. Clean up temporary answering cache & persistent timer
+      // 5. Save durable answer archive for instant offline / local lookup
       const cleanNisn = (studentInfo.nisn || '').trim();
+      const archiveData = {
+        selectedAnswers: answers.selectedAnswers,
+        shortAnswers: answers.shortAnswers,
+        doubtAnswers: answers.doubtAnswers,
+        submittedAt: nowTimeStr,
+      };
+      storage.setItem(`ans_archive_${activeExam.id}_${cleanNisn}`, archiveData).catch(() => {});
+
+      // Clean up temporary answering in-flight cache & timer
       storage.removeItem(`ans_sel_${activeExam.id}_${cleanNisn}`).catch(() => {});
       storage.removeItem(`ans_short_${activeExam.id}_${cleanNisn}`).catch(() => {});
       storage.removeItem(`ans_doubt_${activeExam.id}_${cleanNisn}`).catch(() => {});
@@ -362,9 +556,13 @@ export default function App() {
       storage.removeItem(`ans_short_${activeExam.id}`).catch(() => {});
       storage.removeItem(`ans_doubt_${activeExam.id}`).catch(() => {});
       storage.removeItem(`cbt_exam_end_time_${activeExam.id}_${cleanNisn}`).catch(() => {});
+
+      submittedSessionsRef.current.add(sessionKey);
     } catch (err) {
       console.warn('handleSubmitExam error:', err);
       setStudentStep(4);
+    } finally {
+      isSubmissionInFlightRef.current = false;
     }
   };
 
@@ -375,9 +573,9 @@ export default function App() {
     try {
       const toSync =
         pendingSyncData ||
-        (finalGrade ? { record: finalGrade, examId: activeExam.id, sessionId } : null);
+        (finalGrade ? { record: finalGrade, examId: activeExam.id, sessionId, answers: undefined } : null);
       if (toSync) {
-        await examService.submitGradeRecord(toSync.record, toSync.examId, toSync.sessionId);
+        await examService.submitGradeRecord(toSync.record, toSync.examId, toSync.sessionId, (toSync as any).answers);
         setSyncStatus('synced');
         setPendingSyncData(null);
         await storage.setItem('cbt_sync_status', 'synced');
@@ -470,7 +668,7 @@ export default function App() {
           />
         </View>
         <View style={styles.splashFooter}>
-          <Text style={styles.splashVersionText}>Versi 1.0.0</Text>
+          <Text style={styles.splashVersionText}>Versi {CURRENT_APP_VERSION.version}</Text>
         </View>
       </View>
     );
@@ -489,6 +687,8 @@ export default function App() {
               {studentStep === 0 && (
                 <WelcomeScreen
                   onSelectStudent={() => setStudentStep(1)}
+                  onCheckUpdate={() => handleCheckUpdate(true)}
+                  isCheckingUpdate={isCheckingUpdate}
                 />
               )}
 
@@ -500,15 +700,25 @@ export default function App() {
               )}
 
               {studentStep === 2 && (
-                <StudentLobby
+                <JoinSessionGate
                   exam={activeExam}
-                  questions={activeQuestions}
-                  studentName={studentInfo.name}
                   nisn={studentInfo.nisn}
+                  studentName={studentInfo.name}
                   className={studentInfo.className}
-                  onStartExam={handleStartExam}
-                  onBack={() => setStudentStep(1)}
-                />
+                  onAlreadySubmitted={() => {
+                    setStudentStep(4);
+                  }}
+                >
+                  <StudentLobby
+                    exam={activeExam}
+                    questions={activeQuestions}
+                    studentName={studentInfo.name}
+                    nisn={studentInfo.nisn}
+                    className={studentInfo.className}
+                    onStartExam={handleStartExam}
+                    onBack={() => setStudentStep(1)}
+                  />
+                </JoinSessionGate>
               )}
 
               {studentStep === 3 && (
@@ -543,6 +753,9 @@ export default function App() {
                   syncStatus={syncStatus}
                   onRetrySync={handleRetrySync}
                   onResetToHome={handleResetToHome}
+                  exam={activeExam}
+                  sessionId={sessionId}
+                  questions={activeQuestions}
                 />
               )}
             </>
@@ -585,6 +798,24 @@ export default function App() {
           onClose={() => setIsTeacherAuthOpen(false)}
           onSuccess={handleTeacherAuthSuccess}
         />
+
+        {/* In-App Update Modal */}
+        <UpdateAppModal
+          visible={isUpdateModalVisible}
+          updateInfo={updateInfo}
+          onClose={() => setIsUpdateModalVisible(false)}
+        />
+
+        {/* Feedback Modal for Manual Update Check */}
+        <CustomModal
+          visible={feedbackModal.visible}
+          type={feedbackModal.type}
+          title={feedbackModal.title}
+          message={feedbackModal.message}
+          confirmText="Tutup"
+          onConfirm={() => setFeedbackModal((prev) => ({ ...prev, visible: false }))}
+          onClose={() => setFeedbackModal((prev) => ({ ...prev, visible: false }))}
+        />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -596,6 +827,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  centerBox: {
+    flex: 1,
+    backgroundColor: clayColors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 12,
+  },
+  centerBoxText: {
+    fontFamily: typography.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   splashCenterBox: {
     flex: 1,

@@ -74,3 +74,43 @@ export function formatClassName(raw: string, isTyping = false): string {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   });
 }
+
+/**
+ * Memeriksa apakah suatu log pelanggaran merupakan kejadian siswa keluar/meninggalkan aplikasi ujian.
+ * Mengembalikan false untuk seluruh aksi pengawas (kirim peringatan, reset sesi, submit paksa, tambah waktu)
+ * sehingga pesan peringatan tidak terhitung sebagai pelanggaran keluar siswa.
+ */
+export function isAppExitViolation(log?: { message?: string; severity?: string } | null): boolean {
+  if (!log || !log.message) return false;
+  const msg = log.message.toLowerCase().trim();
+
+  // 1. Abaikan seluruh pesan / tindakan pengawas dan audit sistem
+  if (
+    msg.startsWith('peringatan pengawas') ||
+    msg.startsWith('peringatan dikirim') ||
+    msg.includes('pesan peringatan') ||
+    msg.includes('direset oleh') ||
+    msg.includes('disubmit paksa') ||
+    msg.includes('menambahkan waktu') ||
+    msg.includes('telah dikunci') ||
+    msg.includes('sesi ujian direset')
+  ) {
+    return false;
+  }
+
+  // 2. Deteksi kejadian siswa keluar dari aplikasi
+  if (
+    msg.includes('keluar') ||
+    msg.includes('tertutup') ||
+    msg.includes('meninggalkan aplikasi') ||
+    msg.includes('beralih') ||
+    msg.includes('layar split') ||
+    msg.includes('floating')
+  ) {
+    return true;
+  }
+
+  // 3. Fallback jika log bertipe danger dan bukan submit paksa
+  return log.severity === 'danger' && !msg.includes('submit paksa');
+}
+

@@ -40,7 +40,7 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'Lulus' | 'Remedial'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'Lulus' | 'Remedial' | 'Menunggu Koreksi'>('all');
   const [alertInfo, setAlertInfo] = useState<{ title: string; message: string; type: 'success' | 'warning' } | null>(null);
 
   const fetchGrades = async () => {
@@ -63,6 +63,7 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
   // Analytics Metrics
   const totalStudents = grades.length;
   const passedStudents = grades.filter((g) => g.status === 'Lulus').length;
+  const pendingStudents = grades.filter((g) => g.status === 'Menunggu Koreksi').length;
   const remedialStudents = grades.filter((g) => g.status === 'Remedial').length;
   const passingRate = totalStudents > 0 ? Math.round((passedStudents / totalStudents) * 100) : 0;
   const avgScore = totalStudents > 0 ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / totalStudents) : 0;
@@ -75,6 +76,7 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
       g.nisn.includes(searchQuery);
     if (filterStatus === 'Lulus') return matchesSearch && g.status === 'Lulus';
     if (filterStatus === 'Remedial') return matchesSearch && g.status === 'Remedial';
+    if (filterStatus === 'Menunggu Koreksi') return matchesSearch && g.status === 'Menunggu Koreksi';
     return matchesSearch;
   });
 
@@ -125,33 +127,37 @@ export const TeacherGradeReportView: React.FC<TeacherGradeReportViewProps> = ({
 
         {/* Analytics KPI Dashboard Grid */}
         <View style={styles.analyticsGrid}>
-          {/* Average Score */}
-          <View style={styles.analyticsCard}>
-            <Text style={styles.analyticsLabel}>Rata-Rata Kelas</Text>
-            <View style={styles.analyticsValRow}>
-              <Text style={styles.analyticsVal}>{avgScore}</Text>
-              <Text style={styles.analyticsMax}>/ 100</Text>
+          <View style={styles.analyticsRow}>
+            {/* Average Score */}
+            <View style={styles.analyticsCard}>
+              <Text style={styles.analyticsLabel}>Rata-Rata Kelas</Text>
+              <View style={styles.analyticsValRow}>
+                <Text style={styles.analyticsVal}>{avgScore}</Text>
+                <Text style={styles.analyticsMax}>/ 100</Text>
+              </View>
+              <Text style={styles.analyticsSub}>{totalStudents} Peserta Selesai</Text>
             </View>
-            <Text style={styles.analyticsSub}>{totalStudents} Peserta Selesai</Text>
+
+            {/* Passing Rate */}
+            <View style={styles.analyticsCard}>
+              <Text style={styles.analyticsLabel}>Kelulusan KKM (75)</Text>
+              <Text style={[styles.analyticsVal, styles.textGreen]}>{passingRate}%</Text>
+              <Text style={styles.analyticsSub}>{passedStudents} Lulus • {remedialStudents} Remedial</Text>
+            </View>
           </View>
 
-          {/* Passing Rate */}
-          <View style={styles.analyticsCard}>
-            <Text style={styles.analyticsLabel}>Kelulusan KKM (75)</Text>
-            <Text style={[styles.analyticsVal, styles.textGreen]}>{passingRate}%</Text>
-            <Text style={styles.analyticsSub}>{passedStudents} Lulus • {remedialStudents} Remedial</Text>
-          </View>
+          <View style={styles.analyticsRow}>
+            {/* Highest Score */}
+            <View style={styles.analyticsCardSmall}>
+              <Text style={styles.analyticsLabel}>Nilai Tertinggi</Text>
+              <Text style={[styles.analyticsValSmall, styles.textBlue]}>{highestScore}</Text>
+            </View>
 
-          {/* Highest Score */}
-          <View style={styles.analyticsCardSmall}>
-            <Text style={styles.analyticsLabel}>Nilai Tertinggi</Text>
-            <Text style={[styles.analyticsValSmall, styles.textBlue]}>{highestScore}</Text>
-          </View>
-
-          {/* Lowest Score */}
-          <View style={styles.analyticsCardSmall}>
-            <Text style={styles.analyticsLabel}>Nilai Terendah</Text>
-            <Text style={[styles.analyticsValSmall, styles.textOrange]}>{lowestScore}</Text>
+            {/* Lowest Score */}
+            <View style={styles.analyticsCardSmall}>
+              <Text style={styles.analyticsLabel}>Nilai Terendah</Text>
+              <Text style={[styles.analyticsValSmall, styles.textOrange]}>{lowestScore}</Text>
+            </View>
           </View>
         </View>
 
@@ -358,13 +364,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   analyticsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
     marginBottom: 16,
+    width: '100%',
+  },
+  analyticsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
   },
   analyticsCard: {
-    width: '48.3%',
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 14,
@@ -375,7 +385,7 @@ const styles = StyleSheet.create({
     ...clayShadows.badge,
   },
   analyticsCardSmall: {
-    width: '48.3%',
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 14,

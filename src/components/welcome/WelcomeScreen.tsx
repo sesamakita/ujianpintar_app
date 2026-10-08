@@ -8,6 +8,7 @@ import {
   Platform,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -20,6 +21,7 @@ import {
   Radio,
   GraduationCap,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react-native';
 import {
   typography,
@@ -28,10 +30,13 @@ import {
   clayShadows,
   clayRadii,
 } from '../../theme';
+import { CURRENT_APP_VERSION } from '../../services/updateService';
 
 interface WelcomeScreenProps {
   onSelectStudent: () => void;
   onSelectTeacher?: () => void;
+  onCheckUpdate?: () => void;
+  isCheckingUpdate?: boolean;
 }
 
 interface FeatureItem {
@@ -51,6 +56,8 @@ interface FeatureItem {
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onSelectStudent,
   onSelectTeacher,
+  onCheckUpdate,
+  isCheckingUpdate = false,
 }) => {
   const insets = useSafeAreaInsets();
   const topPadding = (insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 16)) + 14;
@@ -157,45 +164,56 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         </Text>
       </View>
 
-      {/* 2. FEATURE CARDS GRID */}
+      {/* 2. FEATURE CARDS GRID (Universally Responsive 2-Column Rows) */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Fitur Unggulan Sistem CBT</Text>
       </View>
 
       <View style={styles.gridContainer}>
-        {features.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.featureCard,
-              {
-                backgroundColor: item.clayBg,
-                borderBottomColor: item.clayBevel,
-              },
-            ]}
-          >
-            <View style={styles.cardTopRow}>
+        {Array.from({ length: Math.ceil(features.length / 2) }, (_, i) =>
+          features.slice(i * 2, i * 2 + 2)
+        ).map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.gridRow}>
+            {row.map((item) => (
               <View
+                key={item.id}
                 style={[
-                  styles.iconBox,
+                  styles.featureCard,
                   {
-                    backgroundColor: item.clayIconBg,
-                    borderBottomColor: item.clayIconBevel,
+                    backgroundColor: item.clayBg,
+                    borderBottomColor: item.clayBevel,
                   },
                 ]}
               >
-                {item.icon}
-              </View>
-              {item.badge && (
-                <View style={[styles.featureBadge, { backgroundColor: item.badgeBg }]}>
-                  <Text style={[styles.featureBadgeText, { color: item.badgeText }]}>
-                    {item.badge}
-                  </Text>
+                <View style={styles.cardTopRow}>
+                  <View
+                    style={[
+                      styles.iconBox,
+                      {
+                        backgroundColor: item.clayIconBg,
+                        borderBottomColor: item.clayIconBevel,
+                      },
+                    ]}
+                  >
+                    {item.icon}
+                  </View>
+                  {item.badge && (
+                    <View style={[styles.featureBadge, { backgroundColor: item.badgeBg }]}>
+                      <Text style={[styles.featureBadgeText, { color: item.badgeText }]}>
+                        {item.badge}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
-            <Text style={styles.featureTitle}>{item.title}</Text>
-            <Text style={styles.featureDesc}>{item.desc}</Text>
+                <Text style={styles.featureTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Text style={styles.featureDesc} numberOfLines={4}>
+                  {item.desc}
+                </Text>
+              </View>
+            ))}
+            {row.length === 1 && <View style={styles.spacerCard} />}
           </View>
         ))}
       </View>
@@ -225,6 +243,30 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <ArrowRight size={19} color="#ffffff" strokeWidth={2.6} />
         </TouchableOpacity>
       </View>
+
+      {/* 4. FOOTER VERSION & UPDATE CHECK */}
+      <View style={styles.footerVersionRow}>
+        <View style={styles.versionBadge}>
+          <Text style={styles.versionText}>v{CURRENT_APP_VERSION.version} (Build {CURRENT_APP_VERSION.versionCode})</Text>
+        </View>
+        {onCheckUpdate && (
+          <TouchableOpacity
+            style={styles.checkUpdateBtn}
+            onPress={onCheckUpdate}
+            activeOpacity={0.75}
+            disabled={isCheckingUpdate}
+          >
+            {isCheckingUpdate ? (
+              <ActivityIndicator size="small" color="#4F46E5" />
+            ) : (
+              <>
+                <RefreshCw size={12} color="#4F46E5" strokeWidth={2.4} />
+                <Text style={styles.checkUpdateBtnText}>Periksa Pembaruan</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 };
@@ -235,7 +277,8 @@ const styles = StyleSheet.create({
     backgroundColor: clayColors.canvas,
   },
   container: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     paddingTop: Platform.OS === 'android' ? 16 : 24,
     paddingBottom: 40,
     alignItems: 'center',
@@ -293,29 +336,37 @@ const styles = StyleSheet.create({
   gridContainer: {
     width: '100%',
     maxWidth: 460,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     marginBottom: 24,
   },
+  gridRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
   featureCard: {
-    width: '48.3%',
+    flex: 1,
     borderRadius: clayRadii.card,
-    padding: 14,
+    padding: 12,
     borderWidth: 2.2,
     borderColor: '#FFFFFF',
     borderBottomWidth: 5,
+    minHeight: 138,
+    justifyContent: 'flex-start',
     ...clayShadows.card,
+  },
+  spacerCard: {
+    flex: 1,
   },
   cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: clayRadii.pod,
     borderWidth: 2,
     borderColor: '#FFFFFF',
@@ -325,8 +376,8 @@ const styles = StyleSheet.create({
     ...clayShadows.iconPod,
   },
   featureBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: clayRadii.badge,
     borderWidth: 1.2,
     borderColor: '#FFFFFF',
@@ -334,20 +385,20 @@ const styles = StyleSheet.create({
   },
   featureBadgeText: {
     fontFamily: typography.bold,
-    fontSize: 9.5,
+    fontSize: 9,
   },
   featureTitle: {
     fontFamily: typography.bold,
-    fontSize: 12.5,
+    fontSize: 12,
     color: colors.textPrimary,
-    marginBottom: 4,
-    lineHeight: 17,
+    marginBottom: 3,
+    lineHeight: 16,
   },
   featureDesc: {
     fontFamily: typography.regular,
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.textSecondary,
-    lineHeight: 15.5,
+    lineHeight: 14.5,
   },
 
   /* 4. ACTIONS CARD (BOTTOM CTAs) */
@@ -422,5 +473,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#e6fffa',
     marginTop: 1,
+  },
+  footerVersionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  versionBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  versionText: {
+    fontFamily: typography.semiBold,
+    fontSize: 11,
+    color: '#475569',
+  },
+  checkUpdateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: clayRadii.badge,
+    borderWidth: 1.2,
+    borderColor: '#C7D2FE',
+  },
+  checkUpdateBtnText: {
+    fontFamily: typography.bold,
+    fontSize: 11,
+    color: '#4F46E5',
   },
 });

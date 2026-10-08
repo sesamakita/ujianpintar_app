@@ -50,6 +50,8 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
   const [currentExam, setCurrentExam] = useState<ExamSettings>(exam);
   const [timeModalMinutes, setTimeModalMinutes] = useState<number | null>(null);
   const [isLockAllModalOpen, setIsLockAllModalOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isActionBusy, setIsActionBusy] = useState<'none' | 'addTime' | 'lock'>('none');
 
   const {
     students,
@@ -89,22 +91,24 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
   const [selectedStudent, setSelectedStudent] = useState<StudentProctoring | null>(null);
 
   const totalCount = students.length;
-  const workingCount = students.filter((s) => s.status === 'working').length;
+  const workingCount = students.filter((s) => s.status === 'working' || s.status === 'ready').length;
   const violationCount = students.filter((s) => s.violationCount > 0 || s.status === 'violation_flagged').length;
   const submittedCount = students.filter((s) => s.status === 'submitted').length;
 
   const filteredStudents = students.filter((s) => {
-    if (activeFilter === 'working') return s.status === 'working';
+    if (activeFilter === 'working') return s.status === 'working' || s.status === 'ready';
     if (activeFilter === 'violation') return s.violationCount > 0 || s.status === 'violation_flagged';
     if (activeFilter === 'submitted') return s.status === 'submitted';
     return true;
   });
 
   const handleAddTimePrompt = (minutes: number) => {
+    setActionError(null);
     setTimeModalMinutes(minutes);
   };
 
   const handleLockAllPrompt = () => {
+    setActionError(null);
     setIsLockAllModalOpen(true);
   };
 
@@ -117,6 +121,14 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const formatAwayDuration = (sec?: number) => {
+    if (!sec || sec <= 0) return '0d';
+    if (sec < 60) return `${sec}d`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s > 0 ? `${m}m ${s}d` : `${m}m`;
   };
 
   return (
@@ -345,10 +357,17 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
                       </Text>
                     </View>
 
-                    {student.violationCount > 0 ? (
+                    {student.isAway ? (
+                      <View style={[styles.violationTag, { backgroundColor: '#DC2626' }]}>
+                        <AlertTriangle size={11} color="#ffffff" />
+                        <Text style={styles.violationTagText}>Di Luar Aplikasi</Text>
+                      </View>
+                    ) : student.violationCount > 0 ? (
                       <View style={styles.violationTag}>
                         <AlertTriangle size={11} color="#ffffff" />
-                        <Text style={styles.violationTagText}>{student.violationCount} Pelanggaran</Text>
+                        <Text style={styles.violationTagText}>
+                          {student.violationCount}x ({formatAwayDuration(student.totalAwaySeconds)})
+                        </Text>
                       </View>
                     ) : (
                       <View style={styles.actionPrompt}>
@@ -379,14 +398,36 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
         visible={timeModalMinutes !== null}
         type="time"
         title="Tambah Waktu Serentak"
-        message={`Tambahkan waktu pengerjaan +${timeModalMinutes} menit untuk seluruh peserta di basis data server?`}
+        message={
+          actionError
+            ? `Gagal tambah waktu: ${actionError}`
+            : `Tambahkan waktu pengerjaan +${timeModalMinutes} menit untuk seluruh peserta di basis data server?`
+        }
         confirmText={`+${timeModalMinutes} Menit`}
         cancelText="Batal"
-        onConfirm={() => {
-          if (timeModalMinutes) addGlobalTime(timeModalMinutes);
-          setTimeModalMinutes(null);
+        loading={isActionBusy === 'addTime'}
+        onConfirm={async () => {
+          if (isActionBusy !== 'none' || !timeModalMinutes) return;
+          setActionError(null);
+          setIsActionBusy('addTime');
+          try {
+            const res = await addGlobalTime(timeModalMinutes);
+            if (res && res.success === false) {
+              setActionError(res.error || 'Gagal menambah waktu. Coba lagi.');
+              return; // keep modal open so teacher sees the failure
+            }
+            setTimeModalMinutes(null);
+            refreshRoster();
+          } catch (e: any) {
+            setActionError(e?.message || 'Gagal menambah waktu. Coba lagi.');
+          } finally {
+            setIsActionBusy('none');
+          }
         }}
-        onCancel={() => setTimeModalMinutes(null)}
+        onCancel={() => {
+          setTimeModalMinutes(null);
+          setActionError(null);
+        }}
       />
 
       {/* Custom Lock All Exams Modal */}
@@ -394,14 +435,36 @@ export const TeacherProctoringView: React.FC<TeacherProctoringViewProps> = ({
         visible={isLockAllModalOpen}
         type="lock"
         title="Kunci Seluruh Ujian"
-        message="Apakah Anda yakin ingin mengunci dan mengumpulkan seluruh lembar ujian peserta sekarang di basis data?"
+        message={
+          actionError
+            ? `Gagal mengunci: ${actionError}`
+            : 'Apakah Anda yakin ingin mengunci dan mengumpulkan seluruh lembar ujian peserta sekarang di basis data?'
+        }
         confirmText="Kunci & Kumpulkan Semua"
         cancelText="Batal"
-        onConfirm={() => {
-          setIsLockAllModalOpen(false);
-          lockAllExams();
+        loading={isActionBusy === 'lock'}
+        onConfirm={async () => {
+          if (isActionBusy !== 'none') return;
+          setActionError(null);
+          setIsActionBusy('lock');
+          try {
+            const res = await lockAllExams();
+            if (res && res.success === false) {
+              setActionError(res.error || 'Gagal mengunci ujian. Coba lagi.');
+              return; // keep modal open so teacher sees the failure
+            }
+            setIsLockAllModalOpen(false);
+            refreshRoster();
+          } catch (e: any) {
+            setActionError(e?.message || 'Gagal mengunci ujian. Coba lagi.');
+          } finally {
+            setIsActionBusy('none');
+          }
         }}
-        onCancel={() => setIsLockAllModalOpen(false)}
+        onCancel={() => {
+          setIsLockAllModalOpen(false);
+          setActionError(null);
+        }}
       />
     </View>
   );

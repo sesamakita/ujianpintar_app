@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseCountdownOptions {
   initialSeconds: number;
@@ -32,9 +32,9 @@ export function useCountdown({ initialSeconds, isRunning = true, onTimeUp }: Use
     return () => clearInterval(timer);
   }, [isRunning, remainingSeconds]);
 
-  const addTime = (extraSeconds: number) => {
+  const addTime = useCallback((extraSeconds: number) => {
     setRemainingSeconds((prev) => prev + extraSeconds);
-  };
+  }, []);
 
   const formatTime = () => {
     const hours = Math.floor(remainingSeconds / 3600);

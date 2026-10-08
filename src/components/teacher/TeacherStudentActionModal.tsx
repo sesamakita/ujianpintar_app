@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -17,6 +18,7 @@ import {
   CheckSquare,
   User,
   Clock,
+  AlertTriangle,
 } from 'lucide-react-native';
 import type { StudentProctoring } from '../../types/exam';
 import { StatusBadge } from '../common/StatusBadge';
@@ -28,8 +30,8 @@ interface TeacherStudentActionModalProps {
   visible: boolean;
   onClose: () => void;
   onSendWarning: (nisn: string, message: string) => void;
-  onResetSession: (nisn: string, studentName?: string) => void;
-  onForceSubmit: (nisn: string, studentName?: string) => void;
+  onResetSession: (nisn: string, studentName?: string) => Promise<{ success: boolean; error?: string }>;
+  onForceSubmit: (nisn: string, studentName?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps> = ({
@@ -43,6 +45,8 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
   const [warningText, setWarningText] = useState('Harap fokus pada lembar ujian dan jangan beralih aplikasi!');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isForceSubmitModalOpen, setIsForceSubmitModalOpen] = useState(false);
+  const [isActing, setIsActing] = useState<'none' | 'reset' | 'force'>('none');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (!student) return null;
 
@@ -50,6 +54,14 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const formatAwayDuration = (sec?: number) => {
+    if (!sec || sec <= 0) return '0 detik';
+    if (sec < 60) return `${sec} detik`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s > 0 ? `${m}m ${s}d` : `${m}m`;
   };
 
   const handleSend = () => {
@@ -72,7 +84,11 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={[styles.card, { paddingBottom: bottomPadding }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%' }}
+        >
+          <View style={[styles.card, { paddingBottom: bottomPadding }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -92,33 +108,61 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
             </TouchableOpacity>
           </View>
 
+          {/* Live Away Alert Banner */}
+          {student.isAway && (
+            <View style={styles.awayAlertBanner}>
+              <AlertTriangle size={15} color="#ffffff" />
+              <Text style={styles.awayAlertText}>Siswa sedang di luar aplikasi ujian!</Text>
+            </View>
+          )}
+
           {/* Telemetry Status Grid */}
           <View style={styles.telemetryGrid}>
-            <View style={styles.telemetryItem}>
-              <Text style={styles.telemetryLabel}>Status</Text>
-              <StatusBadge status={student.status} size="sm" />
-            </View>
+            <View style={styles.telemetryRow}>
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Status</Text>
+                <StatusBadge status={student.status} size="sm" />
+              </View>
 
-            <View style={styles.telemetryItem}>
-              <Text style={styles.telemetryLabel}>Progress</Text>
-              <Text style={styles.telemetryVal}>
-                {student.progressCount} / {student.totalQuestions} Soal
-              </Text>
-            </View>
-
-            <View style={styles.telemetryItem}>
-              <Text style={styles.telemetryLabel}>Sisa Waktu</Text>
-              <View style={styles.timerValRow}>
-                <Clock size={12} color={colors.primary} />
-                <Text style={styles.telemetryVal}>{formatRemaining(student.remainingSeconds)}</Text>
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Progress</Text>
+                <Text style={styles.telemetryVal}>
+                  {student.progressCount} / {student.totalQuestions} Soal
+                </Text>
               </View>
             </View>
 
-            <View style={styles.telemetryItem}>
-              <Text style={styles.telemetryLabel}>Pelanggaran</Text>
-              <Text style={[styles.telemetryVal, student.violationCount > 0 && styles.textDanger]}>
-                {student.violationCount} Kali
-              </Text>
+            <View style={styles.telemetryRow}>
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Sisa Waktu</Text>
+                <View style={styles.timerValRow}>
+                  <Clock size={12} color={colors.primary} />
+                  <Text style={styles.telemetryVal}>{formatRemaining(student.remainingSeconds)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Pelanggaran</Text>
+                <Text style={[styles.telemetryVal, student.violationCount > 0 && styles.textDanger]}>
+                  {student.violationCount} Kali
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.telemetryRow}>
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Total di Luar</Text>
+                <Text style={[styles.telemetryVal, (student.totalAwaySeconds || 0) > 0 && styles.textDanger]}>
+                  {formatAwayDuration(student.totalAwaySeconds)}
+                </Text>
+              </View>
+
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Status Layar</Text>
+                <Text style={[styles.telemetryVal, student.isAway ? styles.textDanger : { color: '#059669' }]}>
+                  {student.isAway ? 'Di Luar Aplikasi' : 'Aktif di Ujian'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -180,6 +224,7 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </View>
 
       {/* Custom Reset Confirmation Modal */}
@@ -187,15 +232,36 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
         visible={isResetModalOpen}
         type="warning"
         title="Reset Sesi Ujian"
-        message={`Reset sesi pengerjaan untuk ${student.name}? Siswa dapat masuk kembali jika mengalami kendala perangkat.`}
+        message={
+          actionError
+            ? `Gagal reset sesi: ${actionError}`
+            : `Reset sesi pengerjaan untuk ${student.name}? Siswa dapat masuk kembali jika mengalami kendala perangkat.`
+        }
         confirmText="Reset Sesi"
         cancelText="Batal"
-        onConfirm={() => {
-          setIsResetModalOpen(false);
-          onResetSession(student.nisn, student.name);
-          onClose();
+        loading={isActing === 'reset'}
+        onConfirm={async () => {
+          if (isActing !== 'none') return;
+          setActionError(null);
+          setIsActing('reset');
+          try {
+            const res = await onResetSession(student.nisn, student.name);
+            if (res && res.success === false) {
+              setActionError(res.error || 'Gagal reset sesi. Coba lagi.');
+              return; // keep modal open so teacher sees the failure
+            }
+            setIsResetModalOpen(false);
+            onClose();
+          } catch (e: any) {
+            setActionError(e?.message || 'Gagal reset sesi. Coba lagi.');
+          } finally {
+            setIsActing('none');
+          }
         }}
-        onCancel={() => setIsResetModalOpen(false)}
+        onCancel={() => {
+          setIsResetModalOpen(false);
+          setActionError(null);
+        }}
       />
 
       {/* Custom Force Submit Confirmation Modal */}
@@ -203,15 +269,36 @@ export const TeacherStudentActionModal: React.FC<TeacherStudentActionModalProps>
         visible={isForceSubmitModalOpen}
         type="danger"
         title="Paksa Kumpulkan Ujian"
-        message={`Apakah Anda yakin ingin mengumpulkan lembar jawaban ${student.name} sekarang secara sepihak?`}
+        message={
+          actionError
+            ? `Gagal paksa kumpul: ${actionError}`
+            : `Apakah Anda yakin ingin mengumpulkan lembar jawaban ${student.name} sekarang secara sepihak?`
+        }
         confirmText="Paksa Kumpul"
         cancelText="Batal"
-        onConfirm={() => {
-          setIsForceSubmitModalOpen(false);
-          onForceSubmit(student.nisn, student.name);
-          onClose();
+        loading={isActing === 'force'}
+        onConfirm={async () => {
+          if (isActing !== 'none') return;
+          setActionError(null);
+          setIsActing('force');
+          try {
+            const res = await onForceSubmit(student.nisn, student.name);
+            if (res && res.success === false) {
+              setActionError(res.error || 'Gagal paksa kumpul. Coba lagi.');
+              return; // keep modal open so teacher sees the failure
+            }
+            setIsForceSubmitModalOpen(false);
+            onClose();
+          } catch (e: any) {
+            setActionError(e?.message || 'Gagal paksa kumpul. Coba lagi.');
+          } finally {
+            setIsActing('none');
+          }
         }}
-        onCancel={() => setIsForceSubmitModalOpen(false)}
+        onCancel={() => {
+          setIsForceSubmitModalOpen(false);
+          setActionError(null);
+        }}
       />
     </Modal>
   );
@@ -283,9 +370,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: '#CBD5E1',
   },
-  telemetryGrid: {
+  awayAlertBanner: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DC2626',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#B91C1C',
+  },
+  awayAlertText: {
+    fontFamily: typography.bold,
+    fontSize: 12.5,
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  telemetryGrid: {
     backgroundColor: '#F8FAFC',
     borderRadius: 20,
     padding: 14,
@@ -297,8 +400,13 @@ const styles = StyleSheet.create({
     gap: 10,
     ...clayShadows.badge,
   },
+  telemetryRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
   telemetryItem: {
-    width: '47%',
+    flex: 1,
     gap: 4,
   },
   telemetryLabel: {

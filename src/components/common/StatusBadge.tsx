@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { typography, clayColors, clayShadows, clayRadii } from '../../theme';
 
 interface StatusBadgeProps {
-  status: 'working' | 'submitted' | 'violation_flagged' | 'timed_out' | 'online' | 'offline' | 'Lulus' | 'Remedial';
+  status: 'ready' | 'working' | 'submitted' | 'violation_flagged' | 'timed_out' | 'online' | 'offline' | 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
   size?: 'sm' | 'md';
 }
 
@@ -15,6 +15,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm' })
   let dotColor: string = '#64748B';
 
   switch (status) {
+    case 'ready':
+      label = 'Siap (Belum Mulai)';
+      bg = '#F0FDF4';
+      bevel = '#BBF7D0';
+      textColor = '#166534';
+      dotColor = '#22C55E';
+      break;
     case 'working':
       label = 'Sedang Mengerjakan';
       bg = '#EFF6FF';
@@ -70,6 +77,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm' })
       bevel = '#FECDD3';
       textColor = '#9F1239';
       dotColor = '#DC2626';
+      break;
+    case 'Menunggu Koreksi':
+      label = 'MENUNGGU KOREKSI';
+      bg = '#FEF3C7';
+      bevel = '#FDE68A';
+      textColor = '#92400E';
+      dotColor = '#D97706';
       break;
   }
 

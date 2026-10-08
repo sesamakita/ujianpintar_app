@@ -41,20 +41,26 @@ export interface ExamSettings {
 
 export interface StudentProctoring {
   id: string;
+  examId?: string;
   nisn: string;
   name: string;
   className: string;
   progressCount: number;
   totalQuestions: number;
   remainingSeconds: number;
+  startedAt?: string;
   connectionStatus: 'online' | 'reconnecting' | 'offline';
   violationCount: number;
   violationLogs: {
     timestamp: string;
     reason: string;
   }[];
-  status: 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
+  status: 'ready' | 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
   score?: number;
+  isAway?: boolean;
+  leftAt?: string;
+  lastAwaySeconds?: number;
+  totalAwaySeconds?: number;
 }
 
 export interface ViolationLogItem {
@@ -76,7 +82,7 @@ export interface GradeRecord {
   submittedAt: string;
   timeSpentMinutes: number;
   tabViolations: number;
-  status: 'Lulus' | 'Remedial';
+  status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
 }
 
 export interface StudentAnswerState {
@@ -84,4 +90,67 @@ export interface StudentAnswerState {
   selectedOptionId?: string;
   answerText?: string;
   isDoubt: boolean;
+}
+
+export interface StudentAnswerDetailItem {
+  questionId: string;
+  number: number;
+  type: QuestionType;
+  questionText: string;
+  latexFormula?: string;
+  imageUrl?: string;
+  options: Array<{ id: string; label: string; text: string }>;
+  selectedOptionId?: string;
+  selectedOptionLabel?: string;
+  selectedOptionText?: string;
+  answerText?: string;
+  correctOptionId?: string;
+  correctOptionLabel?: string;
+  correctAnswerText?: string;
+  isCorrect: boolean;
+  isDoubt: boolean;
+  pointsEarned: number;
+  maxPoints: number;
+  teacherFeedback?: string;
+  aiFeedback?: string;
+  aiSuggestedScore?: number;
+  isGraded?: boolean;
+}
+
+export interface StudentPublicExamSummary {
+  sessionId: string;
+  examId: string;
+  examTitle: string;
+  subject: string;
+  gradeLevel: string;
+  token?: string;
+  teacherName: string;
+  teacherNip?: string;
+  schoolName: string;
+  schoolNpsn?: string;
+  studentName: string;
+  nisn: string;
+  className: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
+  submittedAt: string;
+  tabViolations: number;
+  breakdown: {
+    objectiveScore: number;
+    objectiveMax: number;
+    shortAnswerScore: number;
+    shortAnswerMax: number;
+    essayScore: number;
+    essayMax: number;
+    hasPendingEssays: boolean;
+  };
+  hasEssayFeedback: boolean;
+  essayFeedbacks?: Array<{
+    questionNumber: number;
+    feedback: string;
+    scoreEarned: number;
+    maxPoints: number;
+  }>;
 }

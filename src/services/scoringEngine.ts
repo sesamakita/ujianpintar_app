@@ -11,9 +11,16 @@ export interface GradeResult {
   totalScore: number;
   maxScore: number;
   percentage: number;
-  status: 'Lulus' | 'Remedial';
+  status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
   correctCount: number;
   totalQuestions: number;
+  hasPendingEssays: boolean;
+  objectiveScore: number;
+  objectiveMax: number;
+  shortAnswerScore: number;
+  shortAnswerMax: number;
+  essayScore: number;
+  essayMax: number;
   details?: Record<string, { isCorrect: boolean; pointsEarned: number }>;
 }
 
@@ -29,6 +36,12 @@ export class ScoringEngine {
     let totalScore = 0;
     let maxScore = 0;
     let correctCount = 0;
+    let objectiveScore = 0;
+    let objectiveMax = 0;
+    let shortAnswerScore = 0;
+    let shortAnswerMax = 0;
+    let essayMax = 0;
+    let hasPendingEssays = false;
     const details: Record<string, { isCorrect: boolean; pointsEarned: number }> = {};
 
     for (const q of questions) {
@@ -37,21 +50,44 @@ export class ScoringEngine {
       const ans = answers.find((a) => a.questionId === q.id);
       let isCorrect = false;
 
-      if (ans) {
-        if (q.type === 'multiple_choice' || q.type === 'true_false') {
-          isCorrect = !!q.correctOptionId && ans.selectedOptionId === q.correctOptionId;
-        } else if (q.type === 'short_answer') {
-          if (q.correctAnswerText && ans.answerText) {
-            const cleanC = q.correctAnswerText.trim().toLowerCase().replace(/,/g, '.');
-            const cleanU = ans.answerText.trim().toLowerCase().replace(/,/g, '.');
-            isCorrect = cleanC === cleanU;
+      if (q.type === 'multiple_choice' || q.type === 'true_false') {
+        objectiveMax += qPoints;
+        if (ans && ans.selectedOptionId) {
+          const selectedOpt = (q.options || []).find((o) => o.id === ans.selectedOptionId);
+          const correctOpt = (q.options || []).find((o) => o.id === q.correctOptionId);
+
+          const idMatch = !!(q.correctOptionId && ans.selectedOptionId === q.correctOptionId);
+          const labelMatch = !!(selectedOpt && correctOpt && selectedOpt.label === correctOpt.label);
+          const textMatch = !!(
+            selectedOpt?.text &&
+            correctOpt?.text &&
+            selectedOpt.text.trim().toLowerCase() === correctOpt.text.trim().toLowerCase()
+          );
+
+          if (idMatch || labelMatch || textMatch) {
+            isCorrect = true;
+            totalScore += qPoints;
+            objectiveScore += qPoints;
+            correctCount++;
           }
         }
-
-        if (isCorrect) {
-          totalScore += qPoints;
-          correctCount++;
+      } else if (q.type === 'short_answer') {
+        shortAnswerMax += qPoints;
+        if (ans && q.correctAnswerText && ans.answerText) {
+          const cleanC = q.correctAnswerText.trim().toLowerCase().replace(/,/g, '.');
+          const cleanU = ans.answerText.trim().toLowerCase().replace(/,/g, '.');
+          if (cleanC === cleanU) {
+            isCorrect = true;
+            totalScore += qPoints;
+            shortAnswerScore += qPoints;
+            correctCount++;
+          }
         }
+      } else if (q.type === 'essay') {
+        essayMax += qPoints;
+        hasPendingEssays = true;
+        // Essay answers require teacher / AI grading, initially 0 points pending
+        isCorrect = false;
       }
 
       details[q.id] = {
@@ -61,7 +97,14 @@ export class ScoringEngine {
     }
 
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-    const status: 'Lulus' | 'Remedial' = percentage >= kkmScore ? 'Lulus' : 'Remedial';
+    
+    // If exam has essays and current objective score hasn't passed KKM, status is pending essay review
+    let status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi' = 'Remedial';
+    if (percentage >= kkmScore) {
+      status = 'Lulus';
+    } else if (hasPendingEssays) {
+      status = 'Menunggu Koreksi';
+    }
 
     return {
       totalScore,
@@ -70,6 +113,13 @@ export class ScoringEngine {
       status,
       correctCount,
       totalQuestions: questions.length,
+      hasPendingEssays,
+      objectiveScore,
+      objectiveMax,
+      shortAnswerScore,
+      shortAnswerMax,
+      essayScore: 0,
+      essayMax,
       details,
     };
   }
