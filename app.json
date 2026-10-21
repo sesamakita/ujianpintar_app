@@ -28,7 +28,8 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "VIBRATE"
+        "VIBRATE",
+        "CAMERA"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -37,7 +38,13 @@
     },
     "plugins": [
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Izinkan aplikasi mengakses kamera untuk memindai QR code ujian."
+        }
+      ]
     ]
   }
 }

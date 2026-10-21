@@ -11,6 +11,8 @@ import {
   Platform,
   StatusBar,
   Keyboard,
+  Vibration,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -21,11 +23,24 @@ import {
   GraduationCap,
   User,
   Award,
+  QrCode,
+  ScanQrCode,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  X,
+  Sparkles,
+  Zap,
+  ZapOff,
 } from 'lucide-react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { examService } from '../../services/examService';
 import { authService, TeacherUser } from '../../services/authService';
+import { rosterService } from '../../services/rosterService';
 import { formatPersonName, formatClassName } from '../../lib/formatters';
-import type { ExamSettings, Question, StudentPublicExamSummary } from '../../types/exam';
+import type { ExamSettings, Question, StudentPublicExamSummary, StudentRosterItem } from '../../types/exam';
 import { StudentResultModal } from '../student/StudentResultModal';
 import { typography, colors, clayColors, clayShadows, clayRadii } from '../../theme';
 
@@ -57,10 +72,10 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const FIELD_OFFSETS: Record<string, number> = {
-    nisn: 40,
-    name: 110,
-    className: 180,
-    token: 250,
+    name: 80,
+    nisn: 160,
+    className: 240,
+    token: 320,
     teacherName: 80,
     teacherTokenPin: 150,
     checkNisn: 480,
@@ -102,11 +117,29 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     }
   };
 
-  // Student Form State
-  const [nisn, setNisn] = useState('');
+  // Student Form State (Susunan: Scan QR -> Nama -> NISN -> Kelas -> Token)
   const [name, setName] = useState('');
+  const [nisn, setNisn] = useState('');
   const [className, setClassName] = useState('');
   const [token, setToken] = useState('');
+
+  // QR Scanner & Synced Exam State
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isQrSynced, setIsQrSynced] = useState(false);
+  const [syncedExamId, setSyncedExamId] = useState('');
+  const [syncedExamTitle, setSyncedExamTitle] = useState('');
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [scannedLock, setScannedLock] = useState(false);
+
+  // Roster Autocomplete State
+  const [classRoster, setClassRoster] = useState<StudentRosterItem[]>([]);
+  const [filteredRoster, setFilteredRoster] = useState<StudentRosterItem[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isRosterSelected, setIsRosterSelected] = useState(false);
 
   // Teacher Form State (Default Nama Pengawas dikosongkan)
   const [teacherName, setTeacherName] = useState('');
@@ -115,6 +148,117 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
   // Common State
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Handlers for Real Camera QR Scanner & Roster
+  const handleOpenScanner = async () => {
+    setErrorMsg(null);
+    setCameraError(null);
+    setCameraReady(false);
+    setScannedLock(false);
+    setIsTorchOn(false);
+    setIsScannerOpen(true);
+
+    try {
+      if (!permission?.granted) {
+        await requestPermission();
+      }
+    } catch (err: any) {
+      console.warn('Gagal meminta izin kamera:', err);
+    }
+  };
+
+  const handleApplySyncedExam = async (payload: {
+    examId: string;
+    examTitle: string;
+    targetClass: string;
+    token?: string;
+  }) => {
+    setSyncedExamId(payload.examId);
+    setSyncedExamTitle(payload.examTitle);
+    setIsQrSynced(true);
+    if (payload.targetClass) {
+      setClassName(payload.targetClass);
+    }
+    // PIN Ujian SELALU dikosongkan agar siswa memasukkannya secara manual atas instruksi pengawas
+    setToken('');
+
+    setSyncNotice(
+      `Berhasil sinkron modul "${payload.examTitle}" (${payload.targetClass ? 'Kelas ' + payload.targetClass : 'Semua Kelas'})!`
+    );
+
+    // Ambil daftar nama siswa kelas target
+    try {
+      const roster = await rosterService.getPublicClassRoster(payload.examId, payload.targetClass);
+      if (roster && roster.length > 0) {
+        setClassRoster(roster);
+        setFilteredRoster(roster);
+        setIsDropdownOpen(true);
+      }
+    } catch (err) {
+      console.warn('Gagal memuat daftar nama siswa:', err);
+    }
+
+    setTimeout(() => {
+      setSyncNotice(null);
+    }, 4500);
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scannedLock) return;
+    setScannedLock(true);
+    try {
+      Vibration.vibrate(80);
+    } catch {}
+    setIsScannerOpen(false);
+    setIsTorchOn(false);
+
+    const parsed = rosterService.parseQrPayload(data);
+    if (parsed) {
+      handleApplySyncedExam({
+        examId: parsed.examId,
+        examTitle: parsed.examTitle,
+        targetClass: parsed.targetClass,
+        token: parsed.token,
+      });
+    } else {
+      setErrorMsg('Format QR Code tidak dikenali atau bukan QR ujian resmi UjianPintar.');
+    }
+  };
+
+  const handleNameInputChange = (txt: string) => {
+    setName(txt);
+    if (isRosterSelected) {
+      setIsRosterSelected(false);
+    }
+
+    if (classRoster.length > 0) {
+      const clean = txt.trim().toLowerCase();
+      if (clean.length > 0) {
+        const matches = classRoster.filter(
+          (s) =>
+            s.studentName.toLowerCase().includes(clean) ||
+            s.nisn.includes(clean)
+        );
+        setFilteredRoster(matches);
+        setIsDropdownOpen(matches.length > 0);
+      } else {
+        setFilteredRoster(classRoster);
+        setIsDropdownOpen(true);
+      }
+    }
+  };
+
+  const handleSelectRosterStudent = (student: StudentRosterItem) => {
+    setName(student.studentName);
+    setNisn(student.nisn);
+    if (student.className) {
+      setClassName(student.className);
+    }
+    setIsRosterSelected(true);
+    setIsDropdownOpen(false);
+    setToken(''); // Selalu biarkan kolom PIN ujian kosong agar diinput manual oleh siswa
+    handleFocusField('token');
+  };
 
   // Check Result State (Dedicated Container)
   const [checkNisn, setCheckNisn] = useState('');
@@ -159,8 +303,18 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     const cleanStudentName = formatPersonName(name).trim();
     const cleanClassNameInput = formatClassName(className, false);
 
-    if (!nisn.trim() || !cleanStudentName || !token.trim()) {
-      setErrorMsg('Harap lengkapi NISN, Nama Lengkap, dan 6 Digit Token PIN.');
+    if (!cleanStudentName) {
+      setErrorMsg('Harap masukkan Nama Lengkap Siswa.');
+      return;
+    }
+
+    if (!nisn.trim()) {
+      setErrorMsg('Harap masukkan nomor NISN Peserta Didik.');
+      return;
+    }
+
+    if (!token.trim()) {
+      setErrorMsg('Harap masukkan 6 Digit Token PIN dari pengawas.');
       return;
     }
 
@@ -177,7 +331,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
 
       if (res.exam && res.questions && res.questions.length > 0) {
         // Gatekeeper Sesi Siswa: Periksa apakah sesi siswa terkunci, NISN konflik, batas kapasitas, atau kuota sesi bulanan guru
-        const resolvedClassName = cleanClassNameInput || formatClassName(res.exam.gradeLevel, false) || 'Kelas X';
+        const resolvedClassName = cleanClassNameInput || formatClassName(res.exam.targetClass || res.exam.gradeLevel, false) || 'Kelas X';
         const accessCheck = await examService.checkStudentSessionAccess(res.exam.id, nisn.trim(), cleanStudentName, resolvedClassName);
         if (!accessCheck.allowed) {
           setErrorMsg(accessCheck.message || 'Akses ujian tidak diizinkan. Silakan hubungi guru pengawas.');
@@ -244,6 +398,173 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     }
   };
 
+  // Dedicated Top-Level Full-Screen QR Scanner (Real Camera)
+  if (isScannerOpen) {
+    return (
+      <View style={styles.scannerDedicatedScreen}>
+        <StatusBar barStyle="light-content" backgroundColor="#0F172A" translucent={true} />
+
+        {/* Scanner Top Bar Header */}
+        <View style={[styles.scannerHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+          <TouchableOpacity
+            style={styles.scannerIconBtn}
+            onPress={() => {
+              setIsScannerOpen(false);
+              setIsTorchOn(false);
+            }}
+            accessibilityLabel="Tutup Pemindai"
+          >
+            <X size={20} color="#ffffff" />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1, paddingHorizontal: 4 }}>
+            <Text style={styles.scannerHeaderTitle}>Pindai QR Soal</Text>
+            <Text style={styles.scannerHeaderSubtitle} numberOfLines={1}>
+              Arahkan kamera ke QR proyektor atau cetakan
+            </Text>
+          </View>
+
+          <View style={styles.scannerHeaderActions}>
+            <TouchableOpacity
+              style={[styles.scannerIconBtn, isTorchOn && styles.scannerIconBtnActive]}
+              onPress={() => setIsTorchOn((prev) => !prev)}
+              accessibilityLabel="Lampu Senter"
+            >
+              {isTorchOn ? <Zap size={18} color="#FBBF24" /> : <ZapOff size={18} color="#94A3B8" />}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Scanner Content Area */}
+        <View style={styles.cameraContainer}>
+          {/* Permission State: Loading */}
+          {permission === null ? (
+            <View style={styles.permissionScreen}>
+              <ActivityIndicator size="large" color="#10B981" />
+              <Text style={[styles.loadingCameraBadgeText, { marginTop: 14 }]}>
+                Memeriksa izin kamera...
+              </Text>
+            </View>
+          ) : !permission.granted ? (
+            /* Permission State: Denied / Not Granted */
+            <View style={styles.permissionScreen}>
+              <View style={styles.permissionIconCircle}>
+                <Camera size={36} color="#10B981" />
+              </View>
+              <Text style={styles.permissionTitle}>Akses Kamera Diperlukan</Text>
+              <Text style={styles.permissionDesc}>
+                Aplikasi membutuhkan izin kamera untuk memindai kode QR modul ujian dari layar proyektor atau cetakan pengawas secara otomatis.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.permissionBtn}
+                onPress={() => requestPermission()}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.permissionBtnText}>Izinkan Akses Kamera</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.permissionSecondaryBtn}
+                onPress={() => Linking.openSettings()}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.permissionSecondaryBtnText}>Buka Pengaturan Perangkat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.permissionCancelBtn}
+                onPress={() => setIsScannerOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.permissionCancelBtnText}>Kembali ke Form</Text>
+              </TouchableOpacity>
+            </View>
+          ) : cameraError ? (
+            /* Camera Error State */
+            <View style={styles.permissionScreen}>
+              <View style={[styles.permissionIconCircle, { borderColor: '#EF4444' }]}>
+                <AlertCircle size={36} color="#EF4444" />
+              </View>
+              <Text style={styles.permissionTitle}>Kamera Tidak Dapat Dibuka</Text>
+              <Text style={styles.permissionDesc}>{cameraError}</Text>
+              <TouchableOpacity
+                style={[styles.permissionBtn, { backgroundColor: '#334155' }]}
+                onPress={() => {
+                  setCameraError(null);
+                  setCameraReady(false);
+                }}
+              >
+                <Text style={styles.permissionBtnText}>Coba Lagi</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.permissionCancelBtn}
+                onPress={() => setIsScannerOpen(false)}
+              >
+                <Text style={styles.permissionCancelBtnText}>Tutup</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Real Camera View with Viewfinder */
+            <>
+              <CameraView
+                style={styles.cameraView}
+                facing="back"
+                enableTorch={isTorchOn}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
+                onBarcodeScanned={scannedLock ? undefined : handleBarcodeScanned}
+                onCameraReady={() => {
+                  setCameraReady(true);
+                  setCameraError(null);
+                }}
+                onMountError={(e) => {
+                  console.error('Camera mount error:', e);
+                  setCameraError(e.message || 'Gagal menginisialisasi kamera.');
+                }}
+              />
+
+              {/* Viewfinder Overlay Mask */}
+              <View style={styles.maskContainer} pointerEvents="box-none">
+                <View style={styles.maskTop}>
+                  {!cameraReady && (
+                    <View style={styles.loadingCameraBadge}>
+                      <ActivityIndicator size="small" color="#10B981" />
+                      <Text style={styles.loadingCameraText}>Mengaktifkan kamera...</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.maskMiddleRow}>
+                  <View style={styles.maskSide} />
+                  <View style={styles.reticleBox}>
+                    <View style={[styles.reticleCorner, styles.topLeft]} />
+                    <View style={[styles.reticleCorner, styles.topRight]} />
+                    <View style={[styles.reticleCorner, styles.bottomLeft]} />
+                    <View style={[styles.reticleCorner, styles.bottomRight]} />
+                    <View style={styles.scanLaser} />
+                  </View>
+                  <View style={styles.maskSide} />
+                </View>
+
+                <View style={styles.maskBottom}>
+                  <View style={styles.instructionPill}>
+                    <ScanQrCode size={16} color="#10B981" />
+                    <Text style={styles.instructionPillText}>Arahkan kotak tepat ke QR Code</Text>
+                  </View>
+                  <Text style={styles.instructionSubtext}>
+                    Data modul dan daftar siswa akan sinkron otomatis setelah terbaca
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.keyboardRoot}
@@ -252,6 +573,7 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
     >
       <ScrollView
         ref={scrollViewRef}
+        nestedScrollEnabled={true}
         contentContainerStyle={[
           styles.container,
           {
@@ -342,75 +664,245 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
           {activeTab === 'student' ? (
             /* TAB 1: STUDENT FORM (Warna Aktif: Emerald / Hijau Siswa) */
             <>
+              {/* Notifikasi Sinkronisasi Berhasil */}
+              {syncNotice && (
+                <View style={styles.syncNoticeBanner}>
+                  <Sparkles size={16} color="#047857" strokeWidth={2.4} />
+                  <Text style={styles.syncNoticeText}>{syncNotice}</Text>
+                </View>
+              )}
+
+              {/* 1. FITUR SCAN / PINDAI QR CODE SOAL (DI PALING ATAS) */}
+              {!isQrSynced ? (
+                <View style={styles.qrScanCard}>
+                  <View style={styles.qrScanTopRow}>
+                    <View style={styles.qrScanIconBox}>
+                      <QrCode size={22} color="#059669" strokeWidth={2.4} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.qrScanTitle}>Pindai QR Code Soal</Text>
+                      <Text style={styles.qrScanSubtitle}>
+                        Arahkan kamera ke QR Code di layar proyektor atau lembar ujian untuk sinkronisasi kelas &amp; daftar nama otomatis.
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.qrScanBtn}
+                    onPress={handleOpenScanner}
+                    activeOpacity={0.85}
+                  >
+                    <ScanQrCode size={18} color="#ffffff" strokeWidth={2.4} />
+                    <Text style={styles.qrScanBtnText}>Buka Kamera Pindai QR</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.qrSyncedBanner}>
+                  <View style={styles.qrSyncedTop}>
+                    <View style={styles.qrSyncedCheck}>
+                      <Check size={16} color="#ffffff" strokeWidth={3} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.qrSyncedLabelRow}>
+                        <Text style={styles.qrSyncedLabel}>MODUL &amp; KELAS TERSINKRONISASI</Text>
+                        {className ? (
+                          <View style={styles.qrClassBadge}>
+                            <Text style={styles.qrClassBadgeText}>{className}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.qrSyncedTitle} numberOfLines={1}>
+                        {syncedExamTitle || 'Paket Ujian Aktif'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.qrRescanBtn}
+                    onPress={handleOpenScanner}
+                    activeOpacity={0.8}
+                  >
+                    <ScanQrCode size={13} color="#047857" strokeWidth={2.4} />
+                    <Text style={styles.qrRescanBtnText}>Pindai Ulang</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* 2. NAMA LENGKAP SISWA (DENGAN AUTOCOMPLETE DROPDOWN) */}
+              <View style={[styles.inputGroup, { zIndex: 100 }]}>
+                <View style={styles.labelRow}>
+                  <Text
+                    style={[
+                      styles.label,
+                      focusedField === 'name' && styles.labelFocusedStudent,
+                    ]}
+                  >
+                    Nama Lengkap Siswa
+                  </Text>
+                  {isRosterSelected ? (
+                    <View style={styles.verifiedBadge}>
+                      <Check size={11} color="#059669" strokeWidth={3} />
+                      <Text style={styles.verifiedBadgeText}>Terdaftar</Text>
+                    </View>
+                  ) : classRoster.length > 0 ? (
+                    <Text style={styles.labelHint}>
+                      {classRoster.length} siswa siap dipilih
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={styles.nameInputWrapper}>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.nameInput,
+                      focusedField === 'name' && styles.inputFocusedStudent,
+                      isRosterSelected && styles.inputSelectedSuccess,
+                    ]}
+                    value={name}
+                    onChangeText={handleNameInputChange}
+                    onFocus={() => {
+                      handleFocusField('name');
+                      if (classRoster.length > 0 && !isRosterSelected) {
+                        setIsDropdownOpen(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setFocusedField(null);
+                      setName(formatPersonName(name).trim());
+                    }}
+                    placeholder={
+                      classRoster.length > 0
+                        ? "Ketik atau pilih nama siswa..."
+                        : "Nama lengkap sesuai daftar hadir"
+                    }
+                    placeholderTextColor={colors.textSubtle}
+                    autoCorrect={false}
+                    spellCheck={false}
+                    autoCapitalize="words"
+                  />
+                  {classRoster.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.dropdownToggleBtn}
+                      onPress={() => setIsDropdownOpen(!isDropdownOpen)}
+                      activeOpacity={0.7}
+                    >
+                      {isDropdownOpen ? (
+                        <ChevronUp size={18} color="#059669" strokeWidth={2.4} />
+                      ) : (
+                        <ChevronDown size={18} color={colors.textMuted} strokeWidth={2.4} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Dropdown Menu Autocomplete */}
+                {isDropdownOpen && filteredRoster.length > 0 && (
+                  <View style={styles.dropdownContainer}>
+                    <View style={styles.dropdownHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Users size={13} color="#065F46" strokeWidth={2.4} />
+                        <Text style={styles.dropdownHeaderText}>
+                          PILIH SISWA KELAS ({filteredRoster.length})
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setIsDropdownOpen(false)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <X size={14} color="#047857" strokeWidth={2.4} />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      style={styles.dropdownScroll}
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                      persistentScrollbar={true}
+                      keyboardShouldPersistTaps="always"
+                    >
+                      {filteredRoster.map((student, idx) => (
+                        <TouchableOpacity
+                          key={student.id || student.nisn || `std-${idx}`}
+                          style={[
+                            styles.dropdownItem,
+                            idx === filteredRoster.length - 1 && styles.dropdownItemLast,
+                          ]}
+                          onPress={() => handleSelectRosterStudent(student)}
+                          activeOpacity={0.7}
+                          delayPressIn={0}
+                        >
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.dropdownItemName}>{student.studentName}</Text>
+                            <Text style={styles.dropdownItemNisn}>
+                              NISN: {student.nisn} • {student.className}
+                            </Text>
+                          </View>
+                          <View style={styles.dropdownItemBadge}>
+                            <Text style={styles.dropdownItemBadgeText}>Pilih</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* 3. NISN PESERTA DIDIK (DITUKAR DI BAWAH NAMA: OTOMATIS TERISI & TERKUNCI) */}
               <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.label,
-                    focusedField === 'nisn' && styles.labelFocusedStudent,
-                  ]}
-                >
-                  NISN Peserta Didik
-                </Text>
+                <View style={styles.labelRow}>
+                  <Text
+                    style={[
+                      styles.label,
+                      focusedField === 'nisn' && styles.labelFocusedStudent,
+                    ]}
+                  >
+                    NISN Peserta Didik
+                  </Text>
+                  {isRosterSelected && (
+                    <View style={styles.autoFilledBadge}>
+                      <Text style={styles.autoFilledBadgeText}>Otomatis Terisi &amp; Terkunci</Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
                   style={[
                     styles.input,
                     focusedField === 'nisn' && styles.inputFocusedStudent,
+                    isRosterSelected && styles.inputLocked,
                   ]}
                   value={nisn}
                   onChangeText={(txt) => setNisn(txt.replace(/[^0-9]/g, ''))}
                   onFocus={() => handleFocusField('nisn')}
                   onBlur={() => setFocusedField(null)}
-                  placeholder="nomor NISN"
+                  placeholder="10 digit nomor NISN"
                   placeholderTextColor={colors.textSubtle}
                   keyboardType="number-pad"
                   maxLength={10}
                   autoCorrect={false}
                   spellCheck={false}
+                  editable={!isRosterSelected}
                 />
               </View>
 
+              {/* 4. KELAS / ROMBONGAN BELAJAR */}
               <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.label,
-                    focusedField === 'name' && styles.labelFocusedStudent,
-                  ]}
-                >
-                  Nama Lengkap Siswa
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    focusedField === 'name' && styles.inputFocusedStudent,
-                  ]}
-                  value={name}
-                  onChangeText={(txt) => setName(formatPersonName(txt))}
-                  onFocus={() => handleFocusField('name')}
-                  onBlur={() => {
-                    setFocusedField(null);
-                    setName(formatPersonName(name).trim());
-                  }}
-                  placeholder="Nama lengkap sesuai daftar hadir"
-                  placeholderTextColor={colors.textSubtle}
-                  autoCorrect={false}
-                  spellCheck={false}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.label,
-                    focusedField === 'className' && styles.labelFocusedStudent,
-                  ]}
-                >
-                  Kelas / Rombongan Belajar
-                </Text>
+                <View style={styles.labelRow}>
+                  <Text
+                    style={[
+                      styles.label,
+                      focusedField === 'className' && styles.labelFocusedStudent,
+                    ]}
+                  >
+                    Kelas / Rombongan Belajar
+                  </Text>
+                  {(isQrSynced || isRosterSelected) && (
+                    <View style={styles.autoFilledBadge}>
+                      <Text style={styles.autoFilledBadgeText}>Terverifikasi</Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
                   style={[
                     styles.input,
                     focusedField === 'className' && styles.inputFocusedStudent,
+                    (isQrSynced || isRosterSelected) && styles.inputLocked,
                   ]}
                   value={className}
                   onChangeText={(txt) => setClassName(formatClassName(txt, true))}
@@ -424,18 +916,25 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                   autoCorrect={false}
                   spellCheck={false}
                   autoCapitalize="words"
+                  editable={!isQrSynced && !isRosterSelected}
                 />
               </View>
 
+              {/* 5. TOKEN PIN UJIAN (6 DIGIT) - DIBERIKAN PENGAWAS SAAT UJIAN DIMULAI */}
               <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.label,
-                    focusedField === 'token' && styles.labelFocusedStudent,
-                  ]}
-                >
-                  Token PIN Ujian (6 Digit)
-                </Text>
+                <View style={styles.labelRow}>
+                  <Text
+                    style={[
+                      styles.label,
+                      focusedField === 'token' && styles.labelFocusedStudent,
+                    ]}
+                  >
+                    Token PIN Ujian (6 Digit)
+                  </Text>
+                  <View style={styles.proctorTokenBadge}>
+                    <Text style={styles.proctorTokenBadgeText}>Diberikan Pengawas</Text>
+                  </View>
+                </View>
                 <View style={styles.tokenWrapper}>
                   <KeyRound
                     size={18}
@@ -460,8 +959,12 @@ export const StudentQuickEntry: React.FC<StudentQuickEntryProps> = ({
                     spellCheck={false}
                   />
                 </View>
+                <Text style={styles.helperText}>
+                  * Masukkan PIN token yang diberikan oleh pengawas saat ujian dimulai.
+                </Text>
               </View>
 
+              {/* 6. TOMBOL KONFIRMASI MASUK UJIAN */}
               <TouchableOpacity
                 style={styles.submitBtn}
                 onPress={handleStudentSubmit}
@@ -1070,5 +1573,587 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13.5,
     letterSpacing: 0.1,
+  },
+
+  /* QR Code Scan & Synced Banner Styles */
+  syncNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    marginBottom: 14,
+  },
+  syncNoticeText: {
+    fontFamily: typography.semiBold,
+    fontSize: 12,
+    color: '#065F46',
+    flex: 1,
+    lineHeight: 16,
+  },
+  qrScanCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#A7F3D0',
+    borderBottomWidth: 4,
+    borderBottomColor: '#6EE7B7',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    ...clayShadows.badge,
+  },
+  qrScanTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  qrScanIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+  },
+  qrScanTitle: {
+    fontFamily: typography.extraBold,
+    fontSize: 14,
+    color: '#065F46',
+  },
+  qrScanSubtitle: {
+    fontFamily: typography.regular,
+    fontSize: 11,
+    color: '#047857',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  qrScanBtn: {
+    backgroundColor: '#059669',
+    height: 42,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#34D399',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#047857',
+  },
+  qrScanBtnText: {
+    fontFamily: typography.bold,
+    fontSize: 13,
+    color: '#ffffff',
+  },
+  qrSyncedBanner: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#6EE7B7',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#34D399',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  qrSyncedTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  qrSyncedCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrSyncedLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  qrSyncedLabel: {
+    fontFamily: typography.extraBold,
+    fontSize: 10,
+    color: '#047857',
+    letterSpacing: 0.5,
+  },
+  qrClassBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  qrClassBadgeText: {
+    fontFamily: typography.extraBold,
+    fontSize: 10,
+    color: '#065F46',
+  },
+  qrSyncedTitle: {
+    fontFamily: typography.bold,
+    fontSize: 13,
+    color: '#064E3B',
+    marginTop: 2,
+  },
+  qrRescanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  qrRescanBtnText: {
+    fontFamily: typography.bold,
+    fontSize: 11,
+    color: '#047857',
+    textDecorationLine: 'underline',
+  },
+
+  /* Input Labels & Badges */
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  labelHint: {
+    fontFamily: typography.medium,
+    fontSize: 11,
+    color: '#059669',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  verifiedBadgeText: {
+    fontFamily: typography.bold,
+    fontSize: 10.5,
+    color: '#065F46',
+  },
+  autoFilledBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  autoFilledBadgeText: {
+    fontFamily: typography.bold,
+    fontSize: 10.5,
+    color: '#0369A1',
+  },
+  proctorTokenBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  proctorTokenBadgeText: {
+    fontFamily: typography.bold,
+    fontSize: 10.5,
+    color: '#B45309',
+  },
+
+  /* Autocomplete Dropdown Styles */
+  nameInputWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  nameInput: {
+    paddingRight: 42,
+  },
+  inputSelectedSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#34D399',
+    borderBottomColor: '#059669',
+  },
+  dropdownToggleBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dropdownContainer: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#A7F3D0',
+    borderBottomWidth: 3.5,
+    borderBottomColor: '#6EE7B7',
+    borderRadius: 14,
+    maxHeight: 280,
+    overflow: 'hidden',
+    ...clayShadows.cardHover,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  dropdownHeaderText: {
+    fontFamily: typography.extraBold,
+    fontSize: 11,
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  dropdownScroll: {
+    maxHeight: 230,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownItemLast: {
+    borderBottomWidth: 0,
+  },
+  dropdownItemName: {
+    fontFamily: typography.bold,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  dropdownItemNisn: {
+    fontFamily: typography.medium,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  dropdownItemBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  dropdownItemBadgeText: {
+    fontFamily: typography.bold,
+    fontSize: 11,
+    color: '#065F46',
+  },
+  inputLocked: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderBottomColor: '#CBD5E1',
+    color: '#475569',
+  },
+  helperText: {
+    fontFamily: typography.medium,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+
+  /* Full-Screen Real Camera Scanner Styles */
+  scannerDedicatedScreen: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+  },
+  cameraContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+  cameraView: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  scannerFullScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99999,
+    elevation: 99999,
+    backgroundColor: '#000000',
+  },
+  scannerHeader: {
+    backgroundColor: '#0F172A',
+    paddingBottom: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+    zIndex: 10,
+  },
+  scannerHeaderTitle: {
+    fontFamily: typography.extraBold,
+    fontSize: 17,
+    color: '#ffffff',
+  },
+  scannerHeaderSubtitle: {
+    fontFamily: typography.regular,
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  scannerHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scannerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerIconBtnActive: {
+    backgroundColor: 'rgba(251, 191, 36, 0.25)',
+    borderWidth: 1.5,
+    borderColor: '#FBBF24',
+  },
+
+  /* Camera Frame & Native Surface */
+  cameraFrame: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+
+  /* Viewfinder Cutout Mask */
+  maskContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  maskTop: {
+    width: '100%',
+    flex: 1,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingCameraBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  loadingCameraBadgeText: {
+    fontFamily: typography.medium,
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  loadingCameraText: {
+    fontFamily: typography.medium,
+    fontSize: 12,
+    color: '#10B981',
+  },
+  maskMiddleRow: {
+    flexDirection: 'row',
+    width: '100%',
+    height: 260,
+  },
+  maskSide: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  reticleBox: {
+    width: 260,
+    height: 260,
+    position: 'relative',
+  },
+  scanLaser: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: '50%',
+    height: 2,
+    backgroundColor: '#10B981',
+    opacity: 0.75,
+    borderRadius: 1,
+  },
+  reticleCorner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: '#10B981',
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4.5,
+    borderLeftWidth: 4.5,
+    borderTopLeftRadius: 12,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4.5,
+    borderRightWidth: 4.5,
+    borderTopRightRadius: 12,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4.5,
+    borderLeftWidth: 4.5,
+    borderBottomLeftRadius: 12,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4.5,
+    borderRightWidth: 4.5,
+    borderBottomRightRadius: 12,
+  },
+  maskBottom: {
+    width: '100%',
+    flex: 1.4,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingHorizontal: 20,
+  },
+  instructionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  instructionPillText: {
+    fontFamily: typography.bold,
+    fontSize: 12.5,
+    color: '#F8FAFC',
+  },
+  instructionSubtext: {
+    fontFamily: typography.semiBold,
+    fontSize: 12,
+    color: '#FFFFFF',
+    marginTop: 10,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+
+  /* Camera Permission Screen */
+  permissionScreen: {
+    flex: 1,
+    backgroundColor: '#090D16',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  permissionIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 2,
+    borderColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  permissionTitle: {
+    fontFamily: typography.extraBold,
+    fontSize: 18,
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  permissionDesc: {
+    fontFamily: typography.regular,
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 26,
+  },
+  permissionBtn: {
+    backgroundColor: '#10B981',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  permissionBtnText: {
+    fontFamily: typography.bold,
+    fontSize: 14,
+    color: '#ffffff',
+  },
+  permissionSecondaryBtn: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  permissionSecondaryBtnText: {
+    fontFamily: typography.bold,
+    fontSize: 14,
+    color: '#E2E8F0',
+  },
+  permissionCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  permissionCancelBtnText: {
+    fontFamily: typography.semiBold,
+    fontSize: 13,
+    color: '#94A3B8',
   },
 });

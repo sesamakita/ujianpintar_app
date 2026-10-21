@@ -25,6 +25,7 @@ export interface ExamSettings {
   title: string;
   subject: string;
   gradeLevel: string;
+  targetClass?: string;
   durationMinutes: number;
   scheduleDate: string;
   scheduleTime: string;
@@ -37,6 +38,27 @@ export interface ExamSettings {
     fullScreenLock: boolean;
     proctorPin?: string;
   };
+}
+
+export interface StudentRosterItem {
+  id?: string;
+  teacherId?: string;
+  nisn: string;
+  studentName: string;
+  className: string;
+  gender?: 'L' | 'P';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface QRExamSyncPayload {
+  type: 'UP_EXAM_SYNC' | 'ujianpintar_exam_sync';
+  v?: number;
+  examId: string;
+  examTitle: string;
+  targetClass: string;
+  subject?: string;
+  token?: string;
 }
 
 export interface StudentProctoring {
