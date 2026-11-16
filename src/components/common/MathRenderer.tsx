@@ -232,7 +232,7 @@ const ensureKatexWebStyles = () => {
 };
 
 // Immediately execute on script evaluation in Web
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
+if ((Platform.OS as string) === 'web' && typeof document !== 'undefined') {
   ensureKatexWebStyles();
 }
 
@@ -266,7 +266,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
   const html = formatMathAndText(contentToRender, block);
 
   // 1. WEB PLATFORM: Direct DOM injection with embedded KaTeX CSS & unified Plus Jakarta Sans
-  if (Platform.OS === 'web') {
+  if ((Platform.OS as string) === 'web') {
     return (
       <div
         className={`math-rendered-content ${isOption ? 'math-rendered-option' : ''} ${className}`}
@@ -281,6 +281,36 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
+    );
+  }
+
+  // 1b. NATIVE PLATFORM: If plain text without LaTeX math, render pure React Native Text to avoid heavy WebView overhead
+  if (!hasMath(contentToRender)) {
+    const fw = String(fontWeight);
+    const resolvedFontFamily =
+      fw === '700' || fw === 'bold' || fw === '800'
+        ? typography.bold
+        : fw === '600'
+        ? typography.semiBold
+        : fw === '500'
+        ? typography.medium
+        : typography.regular;
+
+    return (
+      <View style={style}>
+        <Text
+          style={{
+            fontSize: isOption ? 15.5 : fontSize,
+            color,
+            fontWeight,
+            fontFamily: resolvedFontFamily,
+            lineHeight: isOption ? 22 : Math.round(fontSize * 1.5),
+            textAlign: block ? 'center' : 'left',
+          }}
+        >
+          {contentToRender}
+        </Text>
+      </View>
     );
   }
 

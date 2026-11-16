@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, StatusBar, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, ActivityIndicator, Platform, Image, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -10,7 +10,7 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
-import type { ExamSettings, Question, GradeRecord } from './src/types/exam';
+import type { ExamSettings, Question, GradeRecord, StudentAnswerState } from './src/types/exam';
 import { RoleSelectorModal } from './src/components/auth/RoleSelectorModal';
 import { TeacherAuthModal } from './src/components/auth/TeacherAuthModal';
 import { WelcomeScreen } from './src/components/welcome/WelcomeScreen';
@@ -154,6 +154,7 @@ export default function App() {
 
   // Submission Results & Offline Sync
   const [finalGrade, setFinalGrade] = useState<GradeRecord | null>(null);
+  const [submittedAnswers, setSubmittedAnswers] = useState<StudentAnswerState[]>([]);
   const [integritySeal, setIntegritySeal] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<'synced' | 'pending' | 'syncing'>('synced');
   const [pendingSyncData, setPendingSyncData] = useState<{
@@ -233,6 +234,7 @@ export default function App() {
         const cachedStudent = await storage.getItem<{ name: string; nisn: string; className: string }>('cbt_student_info');
         const cachedStep = await storage.getItem<1 | 2 | 3 | 4>('cbt_student_step');
         const cachedGrade = await storage.getItem<GradeRecord>('cbt_final_grade');
+        const cachedAnswers = await storage.getItem<StudentAnswerState[]>('cbt_submitted_answers');
         const cachedSeal = await storage.getItem<string>('cbt_integrity_seal');
         const cachedSync = await storage.getItem<'synced' | 'pending'>('cbt_sync_status');
         const cachedPending = await storage.getItem<{ record: GradeRecord; examId: string; sessionId: string }>('cbt_pending_sync_data');
@@ -240,6 +242,10 @@ export default function App() {
 
         if (cachedSessionId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cachedSessionId)) {
           setSessionId(cachedSessionId);
+        }
+
+        if (cachedAnswers) {
+          setSubmittedAnswers(cachedAnswers);
         }
 
         if (cachedExam && cachedQuestions && cachedStudent && cachedStep) {
@@ -256,6 +262,17 @@ export default function App() {
                   setStudentStep(4);
                   return;
                 }
+                // Sesi telah ditutup, didiskualifikasi, atau waktu habis
+                Alert.alert(
+                  'Akses Ujian Ditutup',
+                  access.message || 'Sesi ujian Anda tidak aktif atau telah dibatalkan oleh pengawas.'
+                );
+                await storage.removeItem('cbt_active_step');
+                await storage.removeItem('cbt_student_step');
+                await storage.removeItem('cbt_session_id');
+                await storage.removeItem('cbt_active_session_id');
+                setStudentStep(0);
+                return;
               }
             } catch {}
           }
@@ -501,10 +518,12 @@ export default function App() {
 
       // 2. Set grade and INSTANTLY transition to Result View (Step 4)
       setFinalGrade(record);
+      setSubmittedAnswers(fullStudentAnsList);
       setStudentStep(4);
 
-      // Persist grade & step to local storage
+      // Persist grade & step & submitted answers to local storage
       storage.setItem('cbt_final_grade', record).catch(() => {});
+      storage.setItem('cbt_submitted_answers', fullStudentAnsList).catch(() => {});
       storage.setItem('cbt_student_step', 4).catch(() => {});
 
       // 3. Generate SHA-256 integrity seal locally
@@ -523,7 +542,34 @@ export default function App() {
       // 4. Try sending to Supabase / server
       examService
         .submitGradeRecord(record, activeExam.id, sessionId, fullStudentAnsList)
-        .then(() => {
+        .then((res: any) => {
+          if (res && !res.success) {
+            console.warn('Grade save failed, stored in sync queue:', res.error);
+            setSyncStatus('pending');
+            const pending = { record, examId: activeExam.id, sessionId, answers: fullStudentAnsList };
+            setPendingSyncData(pending);
+            storage.setItem('cbt_sync_status', 'pending').catch(() => {});
+            storage.setItem('cbt_pending_sync_data', pending).catch(() => {});
+            return;
+          }
+
+          // Sinkronisasi nilai terverifikasi dari kunci jawaban database
+          if (res && res.evaluatedGrade) {
+            const evaluated = res.evaluatedGrade;
+            const updatedRecord: GradeRecord = {
+              ...record,
+              score: evaluated.score,
+              maxScore: evaluated.maxScore,
+              status: evaluated.status,
+            };
+            setFinalGrade(updatedRecord);
+            if (Array.isArray(evaluated.answers) && evaluated.answers.length > 0) {
+              setSubmittedAnswers(evaluated.answers);
+              storage.setItem('cbt_submitted_answers', evaluated.answers).catch(() => {});
+            }
+            storage.setItem('cbt_final_grade', updatedRecord).catch(() => {});
+          }
+
           setSyncStatus('synced');
           setPendingSyncData(null);
           storage.setItem('cbt_sync_status', 'synced').catch(() => {});
@@ -573,9 +619,12 @@ export default function App() {
     try {
       const toSync =
         pendingSyncData ||
-        (finalGrade ? { record: finalGrade, examId: activeExam.id, sessionId, answers: undefined } : null);
+        (finalGrade ? { record: finalGrade, examId: activeExam.id, sessionId, answers: submittedAnswers } : null);
       if (toSync) {
-        await examService.submitGradeRecord(toSync.record, toSync.examId, toSync.sessionId, (toSync as any).answers);
+        const res = await examService.submitGradeRecord(toSync.record, toSync.examId, toSync.sessionId, (toSync as any).answers);
+        if (res && !res.success) {
+          throw new Error(res.error || 'Gagal menyimpan nilai');
+        }
         setSyncStatus('synced');
         setPendingSyncData(null);
         await storage.setItem('cbt_sync_status', 'synced');
@@ -594,6 +643,7 @@ export default function App() {
   const handleResetToHome = async () => {
     setStudentStep(0);
     setFinalGrade(null);
+    setSubmittedAnswers([]);
     setIntegritySeal('');
     setSyncStatus('synced');
     setPendingSyncData(null);
@@ -606,6 +656,7 @@ export default function App() {
     await storage.removeItem('cbt_student_info');
     await storage.removeItem('cbt_student_step');
     await storage.removeItem('cbt_final_grade');
+    await storage.removeItem('cbt_submitted_answers');
     await storage.removeItem('cbt_integrity_seal');
     await storage.removeItem('cbt_sync_status');
     await storage.removeItem('cbt_pending_sync_data');
@@ -756,6 +807,7 @@ export default function App() {
                   exam={activeExam}
                   sessionId={sessionId}
                   questions={activeQuestions}
+                  answers={submittedAnswers}
                 />
               )}
             </>

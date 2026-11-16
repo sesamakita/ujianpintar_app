@@ -95,7 +95,13 @@ export function useLiveProctoring(examId: string) {
       }
     );
 
+    // Robust REST polling fallback (every 6 seconds) ensuring updates when WebSocket is unavailable
+    const pollInterval = setInterval(() => {
+      loadInitialData();
+    }, 6000);
+
     return () => {
+      clearInterval(pollInterval);
       unsubscribe();
     };
   }, [examId, loadInitialData]);

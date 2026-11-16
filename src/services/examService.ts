@@ -126,7 +126,7 @@ export const examService = {
       // 2. Query questions table associated with exam_id
       const { data: rawQuestions, error: qError } = await supabase
         .from('questions')
-        .select('*')
+        .select('id, number_order, type, question_text, latex_formula, image_url, options, points')
         .eq('exam_id', exam.id)
         .order('number_order', { ascending: true });
 
@@ -182,8 +182,8 @@ export const examService = {
           latexFormula: q.latex_formula || undefined,
           imageUrl: q.image_url || undefined,
           options: optionsList,
-          correctOptionId: q.correct_option_id || undefined,
-          correctAnswerText: q.correct_answer_text || undefined,
+          correctOptionId: undefined, // Kunci disembunyikan demi integritas anti-contek siswa
+          correctAnswerText: undefined,
           points: q.points || 10,
         };
       });
@@ -331,14 +331,18 @@ export const examService = {
             .maybeSingle();
 
           if (examData?.teacher_id) {
-            const { data: profile } = await supabase
+            const { data: profile, error: profErr } = await supabase
               .from('profiles')
               .select('subscription_tier, subscription_expires_at')
               .eq('id', examData.teacher_id)
               .maybeSingle();
 
             let isUnlimited = false;
-            if (profile && (profile.subscription_tier === 'pro' || profile.subscription_tier === 'school')) {
+            // If profile cannot be read (e.g. unauthenticated student blocked by RLS on profiles table),
+            // do not falsely penalize teacher as Free tier.
+            if (profErr) {
+              isUnlimited = true;
+            } else if (profile && (profile.subscription_tier === 'pro' || profile.subscription_tier === 'school')) {
               if (profile.subscription_expires_at) {
                 const expiry = new Date(profile.subscription_expires_at).getTime();
                 if (expiry > Date.now()) {
@@ -600,8 +604,8 @@ export const examService = {
         await supabase.from('student_answers').insert({
           session_id: answer.sessionId,
           question_id: answer.questionId,
-          selected_option_id: (answer.selectedOptionId && isValidUUID(answer.selectedOptionId)) ? answer.selectedOptionId : null,
-          answer_text: answer.answerText || (!isValidUUID(answer.selectedOptionId) ? (answer.selectedOptionId || null) : null),
+          selected_option_id: answer.selectedOptionId || null,
+          answer_text: answer.answerText || null,
           is_doubt: answer.isDoubt,
           answered_at: new Date().toISOString(),
         });
@@ -782,7 +786,7 @@ export const examService = {
       isCorrect?: boolean | null;
       scoreEarned?: number | null;
     }>
-  ) {
+  ): Promise<{ success: boolean; error?: string; evaluatedGrade?: { score: number; maxScore: number; status: string; answers: any[] } }> {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const cleanNisn = grade.nisn.trim();
@@ -864,6 +868,68 @@ export const examService = {
       }
 
       // 2. Safe upsert into grade_records scoped to session_id or (nisn AND student_name)
+      // 2. Evaluasi nilai objektif langsung dari kunci jawaban database (Server-backed verification)
+      let verifiedScore = Math.round(Number(grade.score) || 0);
+      let verifiedMaxScore = Math.round(Number(grade.maxScore) || 100);
+      let verifiedStatus = grade.status || 'Lulus';
+      let verifiedAnswers = answers ? [...answers] : [];
+
+      if (validExamId) {
+        try {
+          const { data: keyRows } = await supabase
+            .from('questions')
+            .select('id, type, options, correct_option_id, correct_answer_text, points')
+            .eq('exam_id', validExamId);
+
+          if (keyRows && keyRows.length > 0) {
+            let totalEarned = 0;
+            let totalMax = 0;
+            let hasPendingEssays = false;
+
+            verifiedAnswers = (answers || []).map((ans) => {
+              const matchedQ = keyRows.find((q: any) => q.id === ans.questionId);
+              if (!matchedQ) return ans;
+
+              const qPoints = matchedQ.points || 10;
+              totalMax += qPoints;
+
+              let isCorrect = false;
+              const qType = (matchedQ.type || 'multiple_choice').toLowerCase();
+
+              if (qType === 'essay') {
+                hasPendingEssays = true;
+                return { ...ans, isCorrect: null, scoreEarned: null };
+              } else if (qType === 'multiple_choice' || qType === 'true_false') {
+                isCorrect = !!(matchedQ.correct_option_id && ans.selectedOptionId === matchedQ.correct_option_id);
+              } else if (qType === 'short_answer') {
+                if (matchedQ.correct_answer_text && ans.answerText) {
+                  const cleanC = matchedQ.correct_answer_text.trim().toLowerCase().replace(/,/g, '.');
+                  const cleanU = ans.answerText.trim().toLowerCase().replace(/,/g, '.');
+                  isCorrect = cleanC === cleanU;
+                }
+              }
+
+              const earned = isCorrect ? qPoints : 0;
+              totalEarned += earned;
+              return { ...ans, isCorrect, scoreEarned: earned };
+            });
+
+            verifiedScore = totalEarned;
+            if (totalMax > 0) verifiedMaxScore = totalMax;
+            const percentage = verifiedMaxScore > 0 ? Math.round((totalEarned / verifiedMaxScore) * 100) : 0;
+            if (percentage >= 75) {
+              verifiedStatus = 'Lulus';
+            } else if (hasPendingEssays) {
+              verifiedStatus = 'Menunggu Koreksi';
+            } else {
+              verifiedStatus = 'Remedial';
+            }
+          }
+        } catch (evalErr) {
+          console.warn('Server-side grading check warning:', evalErr);
+        }
+      }
+
       const gradePayload = {
         exam_id: validExamId,
         session_id: resolvedSessionId,
@@ -871,12 +937,12 @@ export const examService = {
         name: formatPersonName(grade.name).trim(),
         nisn: cleanNisn,
         class_name: formatClassName(grade.className, false).trim() || 'Kelas X',
-        score: Math.round(Number(grade.score) || 0),
-        max_score: Math.round(Number(grade.maxScore) || 100),
+        score: verifiedScore,
+        max_score: verifiedMaxScore,
         submitted_at: grade.submittedAt || new Date().toLocaleString('id-ID'),
         time_spent_minutes: Math.round(Number(grade.timeSpentMinutes) || 0),
         tab_violations: Math.round(Number(grade.tabViolations) || 0),
-        status: grade.status || 'Lulus',
+        status: verifiedStatus,
       };
 
       let matchedGradeId: string | null = null;
@@ -914,28 +980,36 @@ export const examService = {
         }
       }
 
+      let gradeSaveError: any = null;
       if (matchedGradeId) {
-        await supabase
+        const { error: updErr } = await supabase
           .from('grade_records')
           .update(gradePayload)
           .eq('id', matchedGradeId);
+        gradeSaveError = updErr;
       } else {
-        await supabase
+        const { error: insErr } = await supabase
           .from('grade_records')
           .insert(gradePayload);
+        gradeSaveError = insErr;
+      }
+
+      if (gradeSaveError) {
+        console.warn('Grade save DB error:', gradeSaveError.message);
+        return { success: false, error: gradeSaveError.message };
       }
 
       // 3. Batch upsert full student answers to student_answers table for complete audit
       if (resolvedSessionId && Array.isArray(answers) && answers.length > 0) {
         try {
           const nowIso = new Date().toISOString();
-          const answerRows = answers
+          const answerRows = verifiedAnswers
             .filter((a) => a.questionId && isValidUUID(a.questionId))
             .map((a) => ({
               session_id: resolvedSessionId,
               question_id: a.questionId,
-              selected_option_id: (a.selectedOptionId && isValidUUID(a.selectedOptionId)) ? a.selectedOptionId : null,
-              answer_text: a.answerText || (!isValidUUID(a.selectedOptionId) ? (a.selectedOptionId || null) : null),
+              selected_option_id: a.selectedOptionId || null,
+              answer_text: a.answerText || null,
               is_doubt: !!a.isDoubt,
               is_correct: typeof a.isCorrect === 'boolean' ? a.isCorrect : null,
               score_earned: typeof a.scoreEarned === 'number' ? Math.round(a.scoreEarned) : null,
@@ -950,8 +1024,11 @@ export const examService = {
           console.warn('Batch answers sync warning:', ansErr);
         }
       }
-    } catch (err) {
+
+      return { success: true, evaluatedGrade: { score: verifiedScore, maxScore: verifiedMaxScore, status: verifiedStatus, answers: verifiedAnswers } };
+    } catch (err: any) {
       console.warn('Grade submit warning:', err);
+      return { success: false, error: err?.message || 'Gagal menyimpan nilai ke server.' };
     }
   },
 
@@ -1666,7 +1743,8 @@ export const examService = {
         .from('violation_logs')
         .select('*')
         .eq('student_nisn', cleanNisn)
-        .eq('severity', 'warning');
+        .eq('severity', 'warning')
+        .ilike('message', 'Peringatan Pengawas:%');
 
       // Filter exam_id BEFORE order/limit so we truly scope to this exam (including unanchored logs)
       if (examId && isValidUUID(examId)) {
@@ -1733,7 +1811,7 @@ export const examService = {
         (payload: any) => {
           if (payload.new && payload.new.message) {
             const msg = payload.new.message;
-            if (msg.includes('Peringatan Pengawas') || payload.new.severity === 'warning') {
+            if (msg.includes('Peringatan Pengawas')) {
               onWarning({
                 message: msg,
                 timestamp: payload.new.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),

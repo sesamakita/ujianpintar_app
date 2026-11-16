@@ -4,36 +4,58 @@ interface UseCountdownOptions {
   initialSeconds: number;
   isRunning?: boolean;
   onTimeUp?: () => void;
+  targetEndTime?: number;
 }
 
-export function useCountdown({ initialSeconds, isRunning = true, onTimeUp }: UseCountdownOptions) {
+export function useCountdown({ initialSeconds, isRunning = true, onTimeUp, targetEndTime: initialTargetEndTime }: UseCountdownOptions) {
+  const [targetEndTime, setTargetEndTime] = useState<number | null>(initialTargetEndTime || null);
   const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
   const onTimeUpRef = useRef(onTimeUp);
   onTimeUpRef.current = onTimeUp;
 
   useEffect(() => {
     setRemainingSeconds(initialSeconds);
-  }, [initialSeconds]);
+    if (initialTargetEndTime) {
+      setTargetEndTime(initialTargetEndTime);
+    }
+  }, [initialSeconds, initialTargetEndTime]);
 
   useEffect(() => {
     if (!isRunning || remainingSeconds <= 0) return;
 
     const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
+      if (targetEndTime) {
+        const now = Date.now();
+        const rem = Math.max(0, Math.round((targetEndTime - now) / 1000));
+        setRemainingSeconds(rem);
+        if (rem <= 0) {
           clearInterval(timer);
           if (onTimeUpRef.current) onTimeUpRef.current();
-          return 0;
         }
-        return prev - 1;
-      });
+      } else {
+        setRemainingSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            if (onTimeUpRef.current) onTimeUpRef.current();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isRunning, remainingSeconds]);
+  }, [isRunning, remainingSeconds, targetEndTime]);
 
   const addTime = useCallback((extraSeconds: number) => {
+    setTargetEndTime((prev) => (prev ? prev + extraSeconds * 1000 : Date.now() + extraSeconds * 1000));
     setRemainingSeconds((prev) => prev + extraSeconds);
+  }, []);
+
+  const recalibrate = useCallback((targetMs: number) => {
+    setTargetEndTime(targetMs);
+    const rem = Math.max(0, Math.round((targetMs - Date.now()) / 1000));
+    setRemainingSeconds(rem);
   }, []);
 
   const formatTime = () => {
@@ -56,6 +78,7 @@ export function useCountdown({ initialSeconds, isRunning = true, onTimeUp }: Use
     formattedTime: formatTime(),
     isUrgent,
     addTime,
+    recalibrate,
     isTimeUp: remainingSeconds === 0,
   };
 }

@@ -15,6 +15,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Keyboard,
+  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -122,6 +123,7 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
 
   // Countdown Hook with Persistence against app reload/crash
   const [initialCountdownSeconds, setInitialCountdownSeconds] = useState<number>(exam.durationMinutes * 60);
+  const [targetEndTime, setTargetEndTime] = useState<number | null>(null);
 
   useEffect(() => {
     const initTimer = async () => {
@@ -134,22 +136,42 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
       if (savedEndTime && savedEndTime > now) {
         const remaining = Math.max(1, Math.round((savedEndTime - now) / 1000));
         setInitialCountdownSeconds(Math.min(remaining, maxDurationSec));
+        setTargetEndTime(savedEndTime);
       } else {
         const targetEnd = now + maxDurationSec * 1000;
         await storage.setItem(endTimeKey, targetEnd);
         setInitialCountdownSeconds(maxDurationSec);
+        setTargetEndTime(targetEnd);
       }
     };
     initTimer();
   }, [exam.id, exam.durationMinutes, nisn]);
 
-  const { formattedTime, isUrgent, addTime } = useCountdown({
+  const { formattedTime, isUrgent, addTime, recalibrate } = useCountdown({
     initialSeconds: initialCountdownSeconds,
+    targetEndTime: targetEndTime || undefined,
     isRunning: true,
     onTimeUp: () => {
       setIsTimeUpModalOpen(true);
     },
   });
+
+  // Re-sync timer with absolute wall-clock on returning from background
+  useEffect(() => {
+    const cleanNisn = (nisn || '').trim();
+    const endTimeKey = `cbt_exam_end_time_${exam.id}_${cleanNisn}`;
+
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (nextState === 'active') {
+        const savedEndTime = await storage.getItem<number>(endTimeKey);
+        if (savedEndTime && savedEndTime > 0) {
+          recalibrate(savedEndTime);
+        }
+      }
+    });
+
+    return () => sub.remove();
+  }, [exam.id, nisn, recalibrate]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState<boolean>(false);
@@ -370,7 +392,7 @@ export const StudentExamSheet: React.FC<StudentExamSheetProps> = ({
       {/* Question Content */}
       <ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: isKeyboardOpen ? 16 : 28 }]}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: isKeyboardOpen ? 130 : 28 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

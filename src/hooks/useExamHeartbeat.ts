@@ -27,6 +27,8 @@ export function useExamHeartbeat({
   const answeredCountRef = useRef(answeredCount);
   const isHandledForceSubmitRef = useRef(false);
   const mountTimestampRef = useRef<number>(Date.now());
+  const rpcAvailableRef = useRef<boolean>(true);
+  const lastKnownRemainingSecondsRef = useRef<number | null>(null);
 
   onWarningRef.current = onWarning;
   onTimeAddedRef.current = onTimeAdded;
@@ -46,8 +48,8 @@ export function useExamHeartbeat({
       if (!isMounted) return;
 
       try {
-        // --- 1. PRIMARY: Try RPC student_heartbeat (Unified Command Bus) ---
-        if (validExamId) {
+        // --- 1. PRIMARY: Try RPC student_heartbeat (Unified Command Bus) if available ---
+        if (validExamId && rpcAvailableRef.current) {
           const { data, error } = await supabase.rpc('student_heartbeat', {
             p_exam_id: validExamId,
             p_nisn: cleanNisn,
@@ -55,7 +57,12 @@ export function useExamHeartbeat({
             p_last_command_id: lastCommandIdRef.current,
           });
 
-          if (!error && data) {
+          if (error) {
+            // If RPC is not deployed yet on backend, avoid spamming PGRST202
+            if (error.code === 'PGRST202' || error.message?.includes('function public.student_heartbeat')) {
+              rpcAvailableRef.current = false;
+            }
+          } else if (data) {
             // Check submission flag
             if (data.is_submitted || data.status === 'submitted') {
               if (!isHandledForceSubmitRef.current) {
@@ -131,6 +138,21 @@ export function useExamHeartbeat({
         } else if (status.status === 'working') {
           // Reset handled flag when session is reset by teacher
           isHandledForceSubmitRef.current = false;
+        }
+
+        // Detect if teacher added time via REST
+        if (status.remainingSeconds !== null && status.remainingSeconds > 0) {
+          if (lastKnownRemainingSecondsRef.current !== null) {
+            const diff = status.remainingSeconds - lastKnownRemainingSecondsRef.current;
+            if (diff >= 55) {
+              const addedMinutes = Math.round(diff / 60);
+              if (addedMinutes > 0) {
+                try { Vibration.vibrate(300); } catch {}
+                onTimeAddedRef.current?.(addedMinutes);
+              }
+            }
+          }
+          lastKnownRemainingSecondsRef.current = status.remainingSeconds;
         }
 
         const latestWarn = await examService.getLatestTeacherWarning(cleanNisn, examId);

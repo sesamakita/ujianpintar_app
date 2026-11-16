@@ -71,22 +71,30 @@ export const rosterService = {
   async getPublicClassRoster(examId: string, className?: string): Promise<StudentRosterItem[]> {
     try {
       let targetClass = className?.trim() || '';
+      let teacherId = '';
 
-      // 1. If className not provided, fetch target_class from exam
-      if (!targetClass && examId) {
+      // 1. Fetch exam metadata for target_class and teacher_id scoping
+      if (examId) {
         const { data: exData } = await supabase
           .from('exams')
-          .select('*')
+          .select('target_class, grade_level, teacher_id')
           .eq('id', examId)
           .maybeSingle();
 
         if (exData) {
-          targetClass = (exData as any).target_class || (exData as any).grade_level || '';
+          if (!targetClass) {
+            targetClass = (exData as any).target_class || (exData as any).grade_level || '';
+          }
+          teacherId = (exData as any).teacher_id || '';
         }
       }
 
       // 2. Query teacher_student_rosters table
       let query = supabase.from('teacher_student_rosters').select('*');
+
+      if (teacherId) {
+        query = query.or(`teacher_id.eq.${teacherId},teacher_id.eq.local_teacher`);
+      }
 
       if (targetClass && targetClass !== 'Semua Kelas') {
         const clean = targetClass.replace(/^kelas\s*/i, '').trim();
